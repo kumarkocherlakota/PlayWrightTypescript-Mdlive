@@ -45,7 +45,7 @@ target that behaves like a real OAuth-protected service.
   issuing HS256 JWTs (random key per process) and an inventory API with scope checks. It accepts
   exactly the credentials configured for the run (`TEST_USER_EMAIL`, `TEST_USER_PASSWORD`,
   `API_CLIENT_ID`/`API_CLIENT_SECRET`, `API_KEY`), so no account exists in source control. For
-  `local` runs, `tools/local-run` generates throwaway values in memory when none are set.
+  `local` runs, `tools/run/run-cucumber.ts` generates throwaway values in memory when none are set.
 
 ## Alternatives
 

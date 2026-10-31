@@ -45,6 +45,7 @@ export const CONFIG_DEFAULTS: DeepPartial<FrameworkConfig> = {
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
+    maxAttachmentMb: 25,
   },
   logging: {
     level: 'info',

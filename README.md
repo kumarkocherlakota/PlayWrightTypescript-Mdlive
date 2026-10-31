@@ -3,8 +3,8 @@
 Playwright + TypeScript + Cucumber BDD framework for UI, API and UI+API testing, with a healthcare
 reference domain (provider search and appointment booking).
 
-> **Status: Phases 1–3 complete** (foundation, core UI framework, API framework). Allure (Phase 4),
-> the healthcare use case (Phase 5) and CI/agents (Phase 6) are planned in
+> **Status: Phases 1–4 complete** (foundation, core UI framework, API framework, reporting and
+> failure analysis). The healthcare use case (Phase 5) and CI/agents (Phase 6) are planned in
 > [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md). This README is
 > expanded in Phase 7.
 
@@ -57,6 +57,8 @@ See [`.env.example`](.env.example) for the full list.
 | `npm run bdd:unused`                                              | Fails when a step definition is not used by any feature                             |
 | `npm run bdd:lint`                                                | Gherkin lint: tags, selectors/waits in steps, duplicates, broken outlines           |
 | `npm run arch:check`                                              | Layer, domain-boundary and circular-dependency rules                                |
+| `npm run report:allure` / `report:open`                           | Builds `reports/allure-report` from the last run (with trend history) / serves it   |
+| `npm run report:analyze`                                          | Re-runs the failure analysis on the last run's `reports/cucumber/messages.ndjson`   |
 | `npm run reference-app`                                           | Starts the local synthetic reference app at `http://localhost:4000/gallery`         |
 
 Examples:
@@ -118,14 +120,45 @@ configured `auth.apiMethod`.
 
 ## Reports and artifacts
 
-All output goes to `reports/` (git-ignored):
+Every `npm test*` script runs through `tools/run/run-cucumber.ts`. It clears the previous run's
+raw results, runs Cucumber, and then always writes the failure analysis, whether the run passed or
+failed. The exit code is Cucumber's. All output goes to `reports/` (git-ignored); the paths are
+defined in `config/report-paths.json`.
 
-- `reports/cucumber/cucumber-report.html` and `.json`
-- `reports/junit/junit.xml`
-- `reports/logs/worker-<id>.jsonl`: structured, redacted logs per worker
-- `reports/screenshots`, `reports/traces`, `reports/videos`: kept according to the artifact policy (default: on failure only)
+| Output                                    | Contents                                                                                     |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `reports/analysis/failure-analysis.md`    | Totals, failures by category, each failed and flaky scenario with cause, owner and next step |
+| `reports/analysis/failure-analysis.json`  | The same, machine-readable                                                                   |
+| `reports/cucumber/cucumber-report.html`   | Cucumber HTML report with every attachment                                                   |
+| `reports/cucumber/cucumber-report.json`   | Cucumber JSON                                                                                |
+| `reports/cucumber/messages.ndjson`        | Raw Cucumber event stream (input for the analysis)                                           |
+| `reports/junit/junit.xml`                 | JUnit XML for CI test tabs                                                                   |
+| `reports/allure-results`                  | Allure raw results; `npm run report:allure` turns them into `reports/allure-report`          |
+| `reports/logs/worker-<id>.jsonl`          | Structured, redacted logs per worker                                                         |
+| `reports/screenshots`, `traces`, `videos` | Kept according to the artifact policy (default: on failure only)                             |
 
-Open a trace with `npx playwright show-trace reports/traces/<file>.zip`.
+**Failure classification** (ADR-013). Each failed attempt gets one category: automation gap,
+configuration, test data, authentication, environment, API contract, unexpected API response, UI
+locator, timeout, assertion, or unclassified. The same classifier feeds three places: the
+`failure-classification.json` attachment, the analysis, and the Allure categories. A category is a
+triage hint, not a verdict. Confirm it against the evidence. Throw a `FrameworkError` subclass from
+new code so its failures are classified by code rather than by message.
+
+**Flaky scenarios** failed and then passed on a retry (`CI=true`, `RETRIES`). They are listed
+separately in the analysis and grouped under "Flaky" in Allure.
+
+**Evidence on failure:**
+
+- UI scenarios: a screenshot, `ui-diagnostics.json` (console errors, failed requests, HTTP
+  responses ≥ 400, with no query strings) and the video. Videos larger than
+  `artifacts.maxAttachmentMb` (default 25) stay on disk and are referenced by path.
+- API scenarios: `api-exchanges.json`.
+- Every scenario: the redacted scenario log.
+
+Traces are never embedded in reports, because they can contain request headers, cookies and page
+data that cannot be redacted. `ui-artifacts.json` gives the trace path and the command to open
+it: `npx playwright show-trace reports/traces/<file>.zip`. Treat retained traces and videos as
+sensitive, and keep CI retention short.
 
 ## Project layout
 
@@ -135,9 +168,9 @@ src/bdd/             World, hooks, steps, parameter types
 src/domains/         Business domains (component-gallery: UI template, inventory: API template)
 src/interaction/ui/  BasePage, BaseComponent and generic components
 src/interaction/api/ ApiSession, HttpClient, auth strategies, SchemaValidator
-src/core/            Config, errors, logging, security, artifacts, browser lifecycle, polling, test data
+src/core/            Config, errors, failure classification, logging, security, artifacts, browser lifecycle, polling, test data
 reference-app/       Local synthetic app and API used by self-tests (no real data)
-tools/               Gherkin linter, unused-step check, local runner
+tools/               Test runner, failure analysis, Gherkin linter, unused-step check
 config/environments/ Non-secret environment settings
 docs/architecture/   Architecture, ADRs, clarification list
 .cursor/rules/       Governance rules RULE-001 … RULE-018

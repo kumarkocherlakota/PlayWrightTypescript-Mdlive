@@ -1,0 +1,11 @@
+{
+  "cucumberHtml": "reports/cucumber/cucumber-report.html",
+  "cucumberJson": "reports/cucumber/cucumber-report.json",
+  "cucumberMessages": "reports/cucumber/messages.ndjson",
+  "junit": "reports/junit/junit.xml",
+  "allureResults": "reports/allure-results",
+  "allureFormatterOutput": "reports/cucumber/allure-formatter.out",
+  "allureReport": "reports/allure-report",
+  "allureHistory": "reports/allure-history/history.jsonl",
+  "analysisDirectory": "reports/analysis"
+}

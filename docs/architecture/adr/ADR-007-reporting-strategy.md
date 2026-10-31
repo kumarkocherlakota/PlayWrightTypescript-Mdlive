@@ -1,6 +1,6 @@
 # ADR-007: Reporting strategy
 
-- Status: Accepted
+- Status: Accepted (refined by ADR-013)
 - Date: 2026-10-31
 
 ## Context

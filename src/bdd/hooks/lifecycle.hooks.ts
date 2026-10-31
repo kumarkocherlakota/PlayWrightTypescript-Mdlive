@@ -13,6 +13,7 @@ import { getConfig } from '@core/config';
 import { serializeError } from '@core/errors';
 import { ApiSession } from '@interaction/api';
 import { finalizeApiSession } from '@bdd/support/api-session-finalizer';
+import { reportScenarioFailure } from '@bdd/support/failure-reporter';
 import { createScenarioRuntime } from '@bdd/support/scenario-runtime-factory';
 import { runTeardown } from '@bdd/support/scenario-teardown';
 import { finalizeUiSession } from '@bdd/support/ui-session-finalizer';
@@ -87,9 +88,11 @@ After({ name: 'Finalize scenario' }, async function (this: CustomWorld, hook) {
       this.logger,
     );
   } finally {
+    const classification = reportScenarioFailure(this, status, hook.error);
     this.logger.info('Scenario finished', {
       status,
       attempt: this.scenario.attempt,
+      ...(classification === undefined ? {} : { failureCategory: classification.category }),
       ...(failed && hook.error !== undefined ? { error: serializeError(hook.error) } : {}),
     });
     this.attach(this.logBuffer.toJsonLines(), {

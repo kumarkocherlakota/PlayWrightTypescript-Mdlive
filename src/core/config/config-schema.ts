@@ -74,6 +74,8 @@ export const frameworkConfigSchema = z.strictObject({
     screenshot: z.enum(SCREENSHOT_POLICIES),
     video: z.enum(ARTIFACT_POLICIES),
     trace: z.enum(ARTIFACT_POLICIES),
+    /** Traces and videos above this size stay on disk and are referenced by path only. */
+    maxAttachmentMb: z.number().positive(),
   }),
   logging: z.strictObject({
     level: z.enum(LOG_LEVELS),
