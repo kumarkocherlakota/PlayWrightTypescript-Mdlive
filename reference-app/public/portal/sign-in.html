@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in · Patient portal (synthetic)</title>
+    <link rel="stylesheet" href="/portal/assets/portal.css" />
+    <script src="/portal/assets/sign-in.js" type="module"></script>
+  </head>
+  <body>
+    <header>
+      <p class="banner">
+        Synthetic reference application for framework self-tests. It contains no real patient data
+        and is not a real healthcare service.
+      </p>
+    </header>
+
+    <main>
+      <h1>Sign in to the patient portal</h1>
+
+      <p id="sign-in-error" class="error" role="alert" hidden></p>
+
+      <form aria-label="Sign in" method="post" action="/portal/session">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <button type="submit">Sign in</button>
+      </form>
+    </main>
+  </body>
+</html>

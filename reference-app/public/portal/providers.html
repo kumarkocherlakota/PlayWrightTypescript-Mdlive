@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Find a provider · Patient portal (synthetic)</title>
+    <link rel="stylesheet" href="/portal/assets/portal.css" />
+    <script src="/portal/assets/providers.js" type="module"></script>
+  </head>
+  <body>
+    <header>
+      <p class="banner">
+        Synthetic reference application for framework self-tests. It contains no real patient data
+        and is not a real healthcare service.
+      </p>
+      <nav aria-label="Portal">
+        <ul>
+          <li><a href="/portal/providers" aria-current="page">Find a provider</a></li>
+          <li><a href="/portal/dashboard">My appointments</a></li>
+        </ul>
+      </nav>
+      <form method="post" action="/portal/sign-out">
+        <button type="submit">Sign out</button>
+      </form>
+    </header>
+
+    <main>
+      <h1>Find a provider</h1>
+
+      <form aria-label="Provider search" novalidate>
+        <div class="field">
+          <label for="provider-name">Provider name</label>
+          <input id="provider-name" name="name" type="text" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="specialty">Specialty</label>
+          <select id="specialty" name="specialty">
+            <option value="">Any specialty</option>
+            <option>Cardiology</option>
+            <option>Dermatology</option>
+            <option>Family Medicine</option>
+            <option>Pediatrics</option>
+          </select>
+        </div>
+        <button type="submit">Search</button>
+      </form>
+
+      <p id="search-error" class="error" role="alert" hidden></p>
+      <div id="search-status" role="status" aria-live="polite"></div>
+
+      <ul id="provider-results" class="provider-results" aria-label="Providers"></ul>
+    </main>
+  </body>
+</html>

@@ -18,11 +18,14 @@ BeforeAll({ name: 'Start reference app', on: HookTarget.COORDINATOR }, async fun
   }
   const target = new URL(config.ui.baseUrl);
   const secrets = new EnvironmentSecretProvider(new ProcessEnvironmentSource(), new Redactor());
+  const { appointmentPolicy } = config.healthcare;
   try {
     referenceApp = await startReferenceApp({
       host: target.hostname,
       port: Number(target.port || 80),
       identity: identityFrom(secrets),
+      // The app enforces the same policy the scenarios read, so the two cannot drift.
+      ...(appointmentPolicy === undefined ? {} : { appointmentPolicy }),
     });
   } catch (error) {
     throw new FrameworkError(

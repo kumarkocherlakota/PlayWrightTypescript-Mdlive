@@ -99,6 +99,20 @@ export const frameworkConfigSchema = z.strictObject({
       enabled: z.boolean(),
       version: z.enum(['R4', 'R4B', 'R5']),
     }),
+    /**
+     * Appointment rules of the application under test (C-04, C-06, C-08). Optional: environments
+     * whose rules are not confirmed leave it unset, and scenarios that need it fail with a
+     * ConfigurationError instead of assuming values.
+     */
+    appointmentPolicy: z
+      .strictObject({
+        /** Latest bookable slot start, in days from now. */
+        bookingHorizonDays: z.int().positive(),
+        /** Cancellation is refused when the appointment starts sooner than this. */
+        cancellationCutoffHours: z.int().min(0),
+        reasonForVisitMaxLength: z.int().positive(),
+      })
+      .optional(),
   }),
 });
 
@@ -112,6 +126,7 @@ export type BrowserName = UiConfig['browser'];
 export type LogLevel = FrameworkConfig['logging']['level'];
 export type ArtifactPolicy = ArtifactsConfig['video'];
 export type ScreenshotPolicy = ArtifactsConfig['screenshot'];
+export type AppointmentPolicy = NonNullable<FrameworkConfig['healthcare']['appointmentPolicy']>;
 
 function isValidTimeZone(value: string): boolean {
   try {

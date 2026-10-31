@@ -1,0 +1,158 @@
+{
+  "description": "SYNTHETIC REFERENCE REQUIREMENTS for the local reference patient portal. They were written to demonstrate traceability and are not business requirements of any real system. Replace them with confirmed requirements before tracing a real application (CLARIFICATIONS C-19).",
+  "requirements": [
+    {
+      "id": "REQ-AUTH-001",
+      "title": "Member sign-in",
+      "statement": "A member signs in to the patient portal before seeing or changing appointment information, and the portal protects the resulting session.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-AUTH-001.1",
+          "text": "Valid member credentials open the member's appointment dashboard."
+        },
+        {
+          "id": "AC-AUTH-001.2",
+          "text": "Invalid credentials are refused with a message that does not say whether the e-mail address or the password was wrong."
+        },
+        {
+          "id": "AC-AUTH-001.3",
+          "text": "Portal pages showing or changing appointment information send a visitor who is not signed in to the sign-in page."
+        },
+        {
+          "id": "AC-AUTH-001.4",
+          "text": "The session cookie is HttpOnly and SameSite=Strict, so page scripts cannot read it and other sites cannot use it."
+        }
+      ]
+    },
+    {
+      "id": "REQ-PROV-001",
+      "title": "Provider search",
+      "statement": "A member finds providers by name or specialty and sees their available times.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-PROV-001.1",
+          "text": "Searching by name shows each matching provider with specialty, location and available times."
+        },
+        {
+          "id": "AC-PROV-001.2",
+          "text": "Filtering by specialty returns only providers of that specialty."
+        },
+        {
+          "id": "AC-PROV-001.3",
+          "text": "A specialty outside the directory's list is rejected as invalid input."
+        },
+        {
+          "id": "AC-PROV-001.4",
+          "text": "A search without matches says that no providers match."
+        },
+        {
+          "id": "AC-PROV-001.5",
+          "text": "A time that is already booked is reported as unavailable and is not offered for booking."
+        },
+        {
+          "id": "AC-PROV-001.6",
+          "text": "The directory API refuses callers without valid credentials."
+        }
+      ]
+    },
+    {
+      "id": "REQ-APPT-001",
+      "title": "Appointment booking",
+      "statement": "A member books an available time with a provider, giving a reason for visit, within the configured appointment policy.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-APPT-001.1",
+          "text": "Booking an available time confirms the appointment with a reference and stores the chosen provider, time and reason for visit."
+        },
+        {
+          "id": "AC-APPT-001.2",
+          "text": "A time that is already booked cannot be booked again; the portal tells the member to choose another time."
+        },
+        {
+          "id": "AC-APPT-001.3",
+          "text": "The reason for visit is required and may not exceed the configured maximum length; violations are reported on the field."
+        },
+        {
+          "id": "AC-APPT-001.4",
+          "text": "Times beyond the configured booking horizon cannot be booked."
+        },
+        {
+          "id": "AC-APPT-001.5",
+          "text": "Times that have already started cannot be booked."
+        }
+      ]
+    },
+    {
+      "id": "REQ-APPT-002",
+      "title": "Appointment dashboard",
+      "statement": "The member's dashboard shows their appointments as the appointment service records them.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-APPT-002.1",
+          "text": "An appointment appears on the dashboard with reference, provider, specialty, time (the same instant the service records) and status."
+        },
+        {
+          "id": "AC-APPT-002.2",
+          "text": "An appointment booked in the portal is recorded by the service with the chosen time and reason for visit."
+        }
+      ]
+    },
+    {
+      "id": "REQ-APPT-003",
+      "title": "Appointment cancellation",
+      "statement": "A member cancels a booked appointment, subject to the configured cancellation cutoff.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-APPT-003.1",
+          "text": "Confirming a cancellation on the dashboard cancels the appointment, announces it, and removes the cancel option."
+        },
+        {
+          "id": "AC-APPT-003.2",
+          "text": "Appointments starting within the configured cancellation cutoff cannot be cancelled online, and the portal says why."
+        },
+        {
+          "id": "AC-APPT-003.3",
+          "text": "A cancelled appointment cannot be cancelled again."
+        },
+        {
+          "id": "AC-APPT-003.4",
+          "text": "Abandoning a cancellation keeps the appointment unchanged; the confirmation dialog is labelled and receives keyboard focus."
+        },
+        {
+          "id": "AC-APPT-003.5",
+          "text": "A cancellation recorded by the service is shown on the dashboard."
+        }
+      ]
+    },
+    {
+      "id": "REQ-APPT-004",
+      "title": "Privacy of appointment information",
+      "statement": "Appointment information, in particular the reason for visit, is disclosed only to the member it belongs to and only where needed.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-APPT-004.1",
+          "text": "Appointment lists do not include the reason for visit (minimum necessary)."
+        },
+        {
+          "id": "AC-APPT-004.2",
+          "text": "A member cannot retrieve an appointment that is not theirs, and the response does not reveal that it exists."
+        },
+        {
+          "id": "AC-APPT-004.3",
+          "text": "The reason for visit is not written to execution logs."
+        }
+      ]
+    },
+    {
+      "id": "REQ-APPT-005",
+      "title": "Retention of appointment records",
+      "statement": "Cancelled and past appointments are retained only as long as the retention policy allows.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-APPT-005.1",
+          "text": "Appointments older than the retention period are no longer stored. Blocked: the retention period is not defined (CLARIFICATIONS C-11)."
+        }
+      ]
+    }
+  ]
+}

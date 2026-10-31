@@ -40,21 +40,26 @@ Before({ name: 'Initialize scenario runtime' }, function (this: CustomWorld, hoo
   });
 });
 
-Before({ name: 'Open UI session', tags: '@ui' }, async function (this: CustomWorld) {
-  const browser = await worker.browserManager.getBrowser();
-  this.attachUiSession(
-    await UiSession.open(browser, {
-      ui: this.config.ui,
-      artifactPolicy: this.config.artifacts,
-      artifacts: this.artifacts,
-      logger: this.logger.child({ component: 'ui-session' }),
-      redactor: this.redactor,
-    }),
-  );
-});
+// @integration scenarios drive the UI and verify or prepare through the API, so they get both.
+Before(
+  { name: 'Open UI session', tags: '@ui or @integration' },
+  async function (this: CustomWorld) {
+    const browser = await worker.browserManager.getBrowser();
+    this.attachUiSession(
+      await UiSession.open(browser, {
+        ui: this.config.ui,
+        artifactPolicy: this.config.artifacts,
+        artifacts: this.artifacts,
+        logger: this.logger.child({ component: 'ui-session' }),
+        redactor: this.redactor,
+      }),
+    );
+  },
+);
 
 Before(
-  { name: 'Open API session', tags: '@api or @integration' },
+  // @api-setup: UI scenarios that seed their test data through the API.
+  { name: 'Open API session', tags: '@api or @integration or @api-setup' },
   async function (this: CustomWorld) {
     this.attachApiSession(
       await ApiSession.open({

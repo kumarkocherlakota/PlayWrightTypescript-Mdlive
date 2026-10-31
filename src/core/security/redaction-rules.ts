@@ -78,6 +78,8 @@ export const DEFAULT_REDACTION_RULES: RedactionRules = {
     'homeaddress',
     'diagnos',
     'medication',
+    'reasonforvisit',
+    'symptom',
   ],
   patterns: [
     {

@@ -10,10 +10,12 @@
   "scripts": {
     "test": "node --import tsx tools/run/run-cucumber.ts",
     "test:framework": "cross-env TEST_ENV=local node --import tsx tools/run/run-cucumber.ts --profile framework",
+    "test:healthcare": "cross-env TEST_ENV=local node --import tsx tools/run/run-cucumber.ts --profile healthcare",
     "test:smoke": "node --import tsx tools/run/run-cucumber.ts --profile smoke",
     "test:regression": "node --import tsx tools/run/run-cucumber.ts --profile regression",
     "test:ui": "node --import tsx tools/run/run-cucumber.ts --profile ui",
     "test:api": "node --import tsx tools/run/run-cucumber.ts --profile api",
+    "test:integration": "node --import tsx tools/run/run-cucumber.ts --profile integration",
     "test:unit": "node --import tsx --test --test-reporter=spec \"tests/unit/**/*.test.ts\"",
     "bdd:check": "cross-env TEST_ENV=local cucumber-js --profile dryRun",
     "bdd:usage": "cross-env TEST_ENV=local cucumber-js --profile usage",
@@ -23,6 +25,8 @@
     "report:allure": "cross-env NODE_OPTIONS=--import=tsx allure generate --config allurerc.mjs --clean",
     "report:open": "cross-env NODE_OPTIONS=--import=tsx allure open --config allurerc.mjs",
     "report": "npm run report:analyze && npm run report:allure",
+    "traceability": "node --import tsx tools/traceability/cli.ts generate",
+    "traceability:check": "node --import tsx tools/traceability/cli.ts check",
     "reference-app": "node --import tsx reference-app/start.ts",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
@@ -30,7 +34,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "arch:check": "depcruise src tests tools reference-app --config .dependency-cruiser.cjs",
-    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run arch:check && npm run test:unit && npm run bdd:lint && npm run bdd:check && npm run bdd:unused",
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run arch:check && npm run test:unit && npm run bdd:lint && npm run traceability:check && npm run bdd:check && npm run bdd:unused",
     "playwright:install": "playwright install"
   },
   "devDependencies": {

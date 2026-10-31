@@ -1,6 +1,6 @@
 # Universal Playwright Automation Framework — Architecture Proposal
 
-Status: **Phases 1–4 implemented** · Reference domain: Healthcare · Reference workflow: Provider search and appointment booking
+Status: **Phases 1–5 implemented** · Reference domain: Healthcare · Reference workflow: Provider search and appointment booking
 
 This document is the architecture baseline. Every phase is reviewed against it. Decisions that
 change it must be recorded as an ADR under [`adr/`](./adr/).
@@ -71,7 +71,8 @@ A **layered, domain-modular** architecture with **dependency inversion** at the 
 - **Configuration:** one Zod schema; precedence _defaults → `config/environments/<env>.json` → environment variables → runtime overrides_; validated at startup, frozen, and fail-fast with a `ConfigurationError`. Only `src/core/config/environment-source.ts` reads `process.env` (ESLint-enforced).
 - **Secrets:** credentials never enter the config object. They are read through a `SecretProvider` and wrapped in a `Secret` value object whose `toString()`/`toJSON()`/`inspect` return `***`. Only `reveal()` exposes the value, at the point of use.
 - **Redaction:** every log entry and every report attachment passes through a `Redactor` that masks sensitive keys (password, token, authorization, cookie, SSN, DOB, MRN, …) and sensitive patterns (JWTs, bearer tokens, e-mail addresses, card numbers, SSNs).
-- **Lifecycle:** one browser **per worker process**, one `BrowserContext` **per scenario** (ADR-004). Browsers launch lazily only for `@ui` scenarios, so API-only runs never start a browser.
+- **Traceability:** scenarios carry `@REQ-…`/`@AC-…` tags; `tools/traceability` validates them against the requirements catalogue and generates the matrix and coverage summaries. The committed matrix has no results; each run writes one with that run's results (ADR-014).
+- **Lifecycle:** one browser **per worker process**, one `BrowserContext` **per scenario** (ADR-004). Browsers launch lazily only for `@ui` and `@integration` scenarios, so API-only runs never start a browser.
 - **Errors:** `FrameworkError` hierarchy with an error `code`, structured `context` and native `cause`. Errors are never swallowed; they are wrapped with context and rethrown.
 - **Observability:** a scenario-scoped `ExecutionLogger` (structured JSON entries with correlation ID, scenario, browser, environment, retry attempt) plus an `ArtifactManager` that owns all output paths. A single failure classifier (`src/core/failure-analysis`, Phase 4) labels each failed attempt in the `After` hook, in the post-run analysis (`reports/analysis`) and in Allure categories (ADR-013).
 - **Parallel safety:** no mutable module state except the per-process browser handle and the frozen config. Scenario state lives in the World. Test data is unique per scenario (run ID + worker ID + sequence).
@@ -121,13 +122,15 @@ Forbidden directions (enforced in `.dependency-cruiser.cjs`):
 │   ├── architecture/
 │   │   ├── ARCHITECTURE.md
 │   │   ├── CLARIFICATIONS.md
-│   │   └── adr/                   # ADR-001 … ADR-013
+│   │   └── adr/                   # ADR-001 … ADR-014
 │   ├── onboarding/                # New-project onboarding guide (Phase 7)
-│   └── traceability/              # RTM and coverage summaries (Phase 5)
+│   └── traceability/              # requirements catalogue, generated RTM, automation decisions (Phase 5)
 ├── features/
 │   ├── framework/                 # Framework self-checks
 │   └── healthcare/
-│       └── appointments/          # Reference use case (Phase 5)
+│       ├── authentication/        # Reference use case (Phase 5)
+│       ├── providers/
+│       └── appointments/
 ├── reference-app/                 # Local synthetic app: gallery (2), identity + inventory API (3), healthcare (5)
 ├── src/
 │   ├── core/
@@ -223,7 +226,7 @@ must stop and return a clarification request.
 | 2     | `BasePage`, `BaseComponent`, generic components, locator lint rules, synchronization strategy (ADR-011), polling, Gherkin lint, unused-step gate, local reference app with component gallery                                                                                                                                      | Phase 1 gates + UI self-tests on Chromium, Firefox and WebKit                           |
 | 3     | `ApiSession`, `HttpClient`, auth strategies (OAuth 2.0 password and client credentials, API key), Ajv contract schemas, domain client with typed rejections, builders, business validators, unique IDs, cleanup registry and teardown (ADR-012), local identity provider and inventory API                                        | Phase 2 gates + API self-tests against the local reference API                          |
 | 4     | Allure 3 results, report and history; Cucumber messages stream; failure evidence (screenshot, video, console/network/HTTP-error diagnostics, trace by path); one failure classifier shared by the After hook, the post-run analysis and Allure categories; flaky detection for retries; one runner for all test scripts (ADR-013) | Reports produced for passing and failing runs                                           |
-| 5     | Reference app + healthcare appointment use case (UI, API, UI+API), RTM, coverage summary                                                                                                                                                                                                                                          | Scenarios executed against the local reference app only                                 |
+| 5     | Reference patient portal and healthcare APIs; authentication, providers and appointments domains; UI, API and UI + API scenarios (positive, negative, boundary, security, accessibility); policy from configuration; generated traceability matrix with coverage summaries and per-run results (ADR-014)                          | Scenarios executed against the local reference app only                                 |
 | 6     | Cursor agents, axe-core, security tests, browser matrix, sharding, GitHub Actions, Docker, flakiness analysis                                                                                                                                                                                                                     | CI workflow lint (actionlint) + local dry runs                                          |
 | 7     | README, onboarding guide, architecture/dependency/security reviews, final verification                                                                                                                                                                                                                                            | Definition of Done checklist                                                            |
 

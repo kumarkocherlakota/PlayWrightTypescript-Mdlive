@@ -9,6 +9,7 @@ export {
   frameworkConfigSchema,
   type ApiAuthMethod,
   type ApiConfig,
+  type AppointmentPolicy,
   type AuthConfig,
   type ArtifactPolicy,
   type ArtifactsConfig,

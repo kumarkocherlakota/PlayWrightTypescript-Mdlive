@@ -8,6 +8,8 @@ const isCI = process.env.CI === 'true';
 const retries = isCI ? Number(process.env.RETRIES ?? 2) : 0;
 const workers = Number(process.env.PARALLEL_WORKERS ?? 0);
 const unset = 'not set (configuration default)';
+// Manual and blocked scenarios document coverage for traceability; they are never executed.
+const runnable = 'not @wip and not @manual and not @blocked';
 
 /** @type {import('@cucumber/cucumber').IConfiguration} */
 const base = {
@@ -40,27 +42,31 @@ const base = {
   strict: true,
   retry: retries,
   parallel: workers,
-  tags: process.env.TAGS ?? 'not @wip',
+  tags: process.env.TAGS ?? runnable,
 };
 
 export default base;
 
-export const framework = { ...base, tags: '@framework and not @wip' };
-export const smoke = { ...base, tags: '@smoke and not @wip' };
-export const regression = { ...base, tags: '@regression and not @wip' };
-export const ui = { ...base, tags: '@ui and not @wip' };
-export const api = { ...base, tags: '@api and not @wip' };
+export const framework = { ...base, tags: `@framework and ${runnable}` };
+export const healthcare = { ...base, tags: `@healthcare and ${runnable}` };
+export const smoke = { ...base, tags: `@smoke and ${runnable}` };
+export const regression = { ...base, tags: `@regression and ${runnable}` };
+export const ui = { ...base, tags: `@ui and ${runnable}` };
+export const api = { ...base, tags: `@api and ${runnable}` };
+export const integration = { ...base, tags: `@integration and ${runnable}` };
 
 // Quality gate: fails on undefined or ambiguous steps without executing anything.
-export const dryRun = { ...base, dryRun: true, format: ['progress'], tags: '' };
+// Manual and blocked scenarios have no step definitions by design.
+const automated = 'not @manual and not @blocked';
+export const dryRun = { ...base, dryRun: true, format: ['progress'], tags: automated };
 
 // Lists step definitions and their usage; unused definitions are reported as UNUSED.
-export const usage = { ...base, dryRun: true, format: ['usage'], tags: '' };
+export const usage = { ...base, dryRun: true, format: ['usage'], tags: automated };
 
 // Machine-readable usage for the unused-step gate (tools/bdd/unused-steps.ts).
 export const usageJson = {
   ...base,
   dryRun: true,
   format: ['usage-json:reports/bdd/usage.json'],
-  tags: '',
+  tags: automated,
 };

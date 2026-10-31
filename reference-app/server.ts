@@ -1,14 +1,21 @@
 /**
  * LOCAL SYNTHETIC REFERENCE APPLICATION — not a real system and contains no real data.
- * It exists so framework self-tests (and, from Phase 5, the healthcare reference scenarios) can
- * execute without access to a live environment. Results against it say nothing about any real
+ * It exists so framework self-tests and the healthcare reference scenarios can execute without
+ * access to a live environment. Results against it say nothing about any real
  * application.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import {
+  FIXTURE_APPOINTMENT_POLICY,
+  type ReferenceAppointmentPolicy,
+} from './healthcare/appointment-policy';
+import { HealthcareStore, seedDemoProviders } from './healthcare/healthcare-store';
 import { IdentityProvider, type IdentityOptions } from './identity';
 import { authRoutes } from './routes/auth-routes';
 import { galleryRoutes } from './routes/gallery-routes';
+import { healthcareRoutes } from './routes/healthcare-routes';
 import { inventoryRoutes } from './routes/inventory-routes';
+import { portalRoutes } from './routes/portal-routes';
 import { HttpProblem, matchPath, sendJson, type Route } from './routing';
 
 export interface ReferenceAppOptions {
@@ -16,6 +23,8 @@ export interface ReferenceAppOptions {
   readonly port: number;
   /** Accounts the synthetic identity provider accepts; none means every token request fails. */
   readonly identity?: IdentityOptions;
+  /** Rules the synthetic appointment book enforces; defaults to the fixture policy. */
+  readonly appointmentPolicy?: ReferenceAppointmentPolicy;
   readonly routes?: readonly Route[];
 }
 
@@ -33,10 +42,14 @@ const SECURITY_HEADERS: Readonly<Record<string, string>> = {
 
 export async function startReferenceApp(options: ReferenceAppOptions): Promise<ReferenceAppHandle> {
   const identity = new IdentityProvider(options.identity);
+  const store = new HealthcareStore(options.appointmentPolicy ?? FIXTURE_APPOINTMENT_POLICY);
+  seedDemoProviders(store);
   const routes = options.routes ?? [
     ...galleryRoutes,
     ...authRoutes(identity),
     ...inventoryRoutes(identity),
+    ...healthcareRoutes(identity, store),
+    ...portalRoutes(identity),
     healthRoute,
   ];
   const server = createServer((request, response) => {

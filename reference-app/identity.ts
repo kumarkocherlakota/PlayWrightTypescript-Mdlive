@@ -10,14 +10,29 @@ export interface IdentityOptions {
   readonly clients?: readonly { readonly clientId: string; readonly clientSecret: string }[];
   readonly apiKeys?: readonly string[];
   readonly tokenTtlSeconds?: number;
+  readonly portalSessionTtlSeconds?: number;
 }
 
-/** Fixture rule: users may read and write, service clients may only read. */
+/**
+ * Fixture rules: API users may read and write and may seed test data; service clients may only
+ * read; a browser session of the patient portal gets only what the portal needs.
+ */
 export const SCOPES = {
-  user: ['inventory:read', 'inventory:write'],
-  client: ['inventory:read'],
+  user: [
+    'inventory:read',
+    'inventory:write',
+    'providers:read',
+    'appointments:read',
+    'appointments:write',
+    'test-support:write',
+  ],
+  client: ['inventory:read', 'providers:read'],
   apiKey: ['inventory:read', 'inventory:write'],
+  portal: ['providers:read', 'appointments:read', 'appointments:write'],
 } as const;
+
+/** Name of the patient-portal session cookie. */
+export const PORTAL_SESSION_COOKIE = 'portal_session';
 
 export interface Principal {
   readonly subject: string;
@@ -34,17 +49,52 @@ export interface IssuedToken {
 export class IdentityProvider {
   private readonly signingKey = randomBytes(32);
   private readonly ttlSeconds: number;
+  public readonly portalSessionTtlSeconds: number;
+  private readonly sessions = new Map<string, { subject: string; expiresAt: number }>();
 
   public constructor(private readonly options: IdentityOptions = {}) {
     this.ttlSeconds = options.tokenTtlSeconds ?? 300;
+    this.portalSessionTtlSeconds = options.portalSessionTtlSeconds ?? 1_800;
   }
 
   public passwordGrant(username: string, password: string): IssuedToken | undefined {
-    const known = (this.options.users ?? []).some(
+    return this.isKnownUser(username, password)
+      ? this.issue(userSubject(username), SCOPES.user)
+      : undefined;
+  }
+
+  /** Starts a patient-portal session; returns the opaque session ID, or undefined. */
+  public startPortalSession(username: string, password: string): string | undefined {
+    if (!this.isKnownUser(username, password)) {
+      return undefined;
+    }
+    const sessionId = randomBytes(24).toString('base64url');
+    this.sessions.set(sessionId, {
+      subject: userSubject(username),
+      expiresAt: Date.now() + this.portalSessionTtlSeconds * 1_000,
+    });
+    return sessionId;
+  }
+
+  public endPortalSession(sessionId: string | undefined): void {
+    if (sessionId !== undefined) {
+      this.sessions.delete(sessionId);
+    }
+  }
+
+  /** Resolves a portal session ID to a principal; undefined when unknown or expired. */
+  public portalPrincipal(sessionId: string | undefined): Principal | undefined {
+    const session = sessionId === undefined ? undefined : this.sessions.get(sessionId);
+    if (session === undefined || session.expiresAt <= Date.now()) {
+      return undefined;
+    }
+    return { subject: session.subject, scopes: SCOPES.portal };
+  }
+
+  private isKnownUser(username: string, password: string): boolean {
+    return (this.options.users ?? []).some(
       (user) => safeEqual(user.username, username) && safeEqual(user.password, password),
     );
-    // The subject is a hash, so tokens never carry the (synthetic) e-mail address.
-    return known ? this.issue(`user-${digest(username)}`, SCOPES.user) : undefined;
   }
 
   public clientCredentialsGrant(clientId: string, clientSecret: string): IssuedToken | undefined {
@@ -119,6 +169,11 @@ export class IdentityProvider {
 
 function encode(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
+}
+
+/** The subject is a hash, so tokens and sessions never carry the (synthetic) e-mail address. */
+function userSubject(username: string): string {
+  return `user-${digest(username)}`;
 }
 
 function digest(value: string): string {

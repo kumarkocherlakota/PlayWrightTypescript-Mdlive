@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { authorize as authorizeCaller } from '../authorization';
 import type { IdentityProvider } from '../identity';
 import { readJsonBody, sendEmpty, sendJson, type Route } from '../routing';
 
@@ -36,32 +37,8 @@ export function inventoryRoutes(identity: IdentityProvider): readonly Route[] {
   const items = new Map<string, InventoryItem>();
   const base = '/api/inventory/items';
 
-  /** Sends 401/403 and returns false unless the caller holds `scope`. */
-  const authorize = (
-    request: IncomingMessage,
-    response: ServerResponse,
-    scope: string,
-  ): boolean => {
-    const apiKey = request.headers['x-api-key'];
-    const principal = identity.authenticate(
-      request.headers.authorization,
-      typeof apiKey === 'string' ? apiKey : undefined,
-    );
-    if (principal === undefined) {
-      sendJson(response, 401, { error: 'unauthorized' }, { 'WWW-Authenticate': 'Bearer' });
-      return false;
-    }
-    if (!principal.scopes.includes(scope)) {
-      sendJson(
-        response,
-        403,
-        { error: 'insufficient_scope', scope },
-        { 'WWW-Authenticate': `Bearer error="insufficient_scope", scope="${scope}"` },
-      );
-      return false;
-    }
-    return true;
-  };
+  const authorize = (request: IncomingMessage, response: ServerResponse, scope: string) =>
+    authorizeCaller(identity, request, response, scope) !== undefined;
 
   return [
     {
