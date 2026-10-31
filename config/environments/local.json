@@ -17,5 +17,12 @@
   },
   "referenceApp": {
     "autoStart": true
+  },
+  "healthcare": {
+    "appointmentPolicy": {
+      "bookingHorizonDays": 30,
+      "cancellationCutoffHours": 24,
+      "reasonForVisitMaxLength": 200
+    }
   }
 }

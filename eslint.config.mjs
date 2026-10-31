@@ -40,6 +40,11 @@ export default defineConfig(
   },
 
   {
+    files: ['reference-app/public/portal/**/*.js'],
+    languageOptions: { sourceType: 'module' },
+  },
+
+  {
     files: ['**/*.ts'],
     extends: [
       js.configs.recommended,

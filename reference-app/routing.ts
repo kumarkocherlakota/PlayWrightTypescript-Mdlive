@@ -50,6 +50,27 @@ export function sendEmpty(response: ServerResponse, status: number): void {
   response.end();
 }
 
+/** Sends a 303 See Other, so the browser follows with a GET. */
+export function redirect(
+  response: ServerResponse,
+  location: string,
+  headers: Readonly<Record<string, string | readonly string[]>> = {},
+): void {
+  response.writeHead(303, { Location: location, ...headers });
+  response.end();
+}
+
+/** Returns the value of one cookie from the request, or undefined. */
+export function readCookie(request: IncomingMessage, name: string): string | undefined {
+  for (const pair of (request.headers.cookie ?? '').split(';')) {
+    const separator = pair.indexOf('=');
+    if (separator > 0 && pair.slice(0, separator).trim() === name) {
+      return pair.slice(separator + 1).trim();
+    }
+  }
+  return undefined;
+}
+
 /** Returns route params when `pattern` matches `pathname`, otherwise undefined. */
 export function matchPath(pattern: string, pathname: string): RouteParams | undefined {
   const expected = pattern.split('/');

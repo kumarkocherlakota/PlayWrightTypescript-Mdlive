@@ -66,9 +66,12 @@ export class CustomWorld extends World<WorldParameters> {
 
   public get ui(): UiSession {
     if (this.uiSession === undefined) {
-      throw new FrameworkError('This scenario has no UI session. Tag the scenario with @ui.', {
-        context: { scenario: this.runtime?.scenario.name },
-      });
+      throw new FrameworkError(
+        'This scenario has no UI session. Tag the scenario with @ui or @integration.',
+        {
+          context: { scenario: this.runtime?.scenario.name },
+        },
+      );
     }
     return this.uiSession;
   }
@@ -94,7 +97,7 @@ export class CustomWorld extends World<WorldParameters> {
   public get api(): ApiSession {
     if (this.apiSession === undefined) {
       throw new FrameworkError(
-        'This scenario has no API session. Tag the scenario with @api or @integration.',
+        'This scenario has no API session. Tag the scenario with @api, @integration or @api-setup.',
         { context: { scenario: this.runtime?.scenario.name } },
       );
     }

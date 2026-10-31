@@ -28,6 +28,9 @@ describe('Redactor', () => {
       mrn: '123',
       firstName: 'Ada',
       diagnosisCode: 'Z00',
+      reasonForVisit: 'synthetic follow-up',
+      reason_for_visit: 'synthetic follow-up',
+      symptoms: 'synthetic',
     });
     assert.ok(Object.values(result as Record<string, unknown>).every((value) => value === MASK));
   });

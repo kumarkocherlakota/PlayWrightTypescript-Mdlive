@@ -3,8 +3,8 @@
 Playwright + TypeScript + Cucumber BDD framework for UI, API and UI+API testing, with a healthcare
 reference domain (provider search and appointment booking).
 
-> **Status: Phases 1–4 complete** (foundation, core UI framework, API framework, reporting and
-> failure analysis). The healthcare use case (Phase 5) and CI/agents (Phase 6) are planned in
+> **Status: Phases 1–5 complete** (foundation, core UI framework, API framework, reporting and
+> failure analysis, healthcare use case with traceability). CI/agents (Phase 6) are planned in
 > [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md). This README is
 > expanded in Phase 7.
 
@@ -47,8 +47,12 @@ See [`.env.example`](.env.example) for the full list.
 
 | Command                                                           | What it does                                                                        |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `npm run validate`                                                | Format check, lint, type check, architecture boundaries, unit tests, BDD dry run    |
+| `npm run validate`                                                | Format check, lint, type check, boundaries, unit tests, BDD checks, traceability    |
 | `npm run test:framework`                                          | Framework self-checks (UI and API) against the local synthetic reference app        |
+| `npm run test:healthcare`                                         | Healthcare use case (UI, API, UI + API) against the local synthetic patient portal  |
+| `npm run test:integration`                                        | Only the `@integration` (UI + API) scenarios                                        |
+| `npm run traceability`                                            | Regenerates `docs/traceability/traceability-matrix.md` from the feature tags        |
+| `npm run traceability:check`                                      | Fails on broken requirement links or when the committed matrix is out of date       |
 | `npm test`                                                        | All non-`@wip` scenarios for `TEST_ENV` (default `qa`)                              |
 | `npm run test:smoke` / `test:regression` / `test:ui` / `test:api` | Tag-based profiles                                                                  |
 | `npm run test:unit`                                               | Unit tests for framework code (`node:test`); UI-layer tests need Chromium installed |
@@ -66,6 +70,7 @@ Examples:
 ```bash
 PARALLEL_WORKERS=4 npm run test:framework
 BROWSER=firefox npm run test:framework
+PARALLEL_WORKERS=4 npm run test:healthcare
 npx cucumber-js --profile framework --tags "@security"
 ```
 
@@ -125,17 +130,18 @@ raw results, runs Cucumber, and then always writes the failure analysis, whether
 failed. The exit code is Cucumber's. All output goes to `reports/` (git-ignored); the paths are
 defined in `config/report-paths.json`.
 
-| Output                                    | Contents                                                                                     |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `reports/analysis/failure-analysis.md`    | Totals, failures by category, each failed and flaky scenario with cause, owner and next step |
-| `reports/analysis/failure-analysis.json`  | The same, machine-readable                                                                   |
-| `reports/cucumber/cucumber-report.html`   | Cucumber HTML report with every attachment                                                   |
-| `reports/cucumber/cucumber-report.json`   | Cucumber JSON                                                                                |
-| `reports/cucumber/messages.ndjson`        | Raw Cucumber event stream (input for the analysis)                                           |
-| `reports/junit/junit.xml`                 | JUnit XML for CI test tabs                                                                   |
-| `reports/allure-results`                  | Allure raw results; `npm run report:allure` turns them into `reports/allure-report`          |
-| `reports/logs/worker-<id>.jsonl`          | Structured, redacted logs per worker                                                         |
-| `reports/screenshots`, `traces`, `videos` | Kept according to the artifact policy (default: on failure only)                             |
+| Output                                        | Contents                                                                                     |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `reports/analysis/failure-analysis.md`        | Totals, failures by category, each failed and flaky scenario with cause, owner and next step |
+| `reports/analysis/failure-analysis.json`      | The same, machine-readable                                                                   |
+| `reports/cucumber/cucumber-report.html`       | Cucumber HTML report with every attachment                                                   |
+| `reports/cucumber/cucumber-report.json`       | Cucumber JSON                                                                                |
+| `reports/cucumber/messages.ndjson`            | Raw Cucumber event stream (input for the analysis)                                           |
+| `reports/junit/junit.xml`                     | JUnit XML for CI test tabs                                                                   |
+| `reports/allure-results`                      | Allure raw results; `npm run report:allure` turns them into `reports/allure-report`          |
+| `reports/logs/worker-<id>.jsonl`              | Structured, redacted logs per worker                                                         |
+| `reports/traceability/traceability-matrix.md` | Traceability matrix and coverage summaries with this run's result per scenario               |
+| `reports/screenshots`, `traces`, `videos`     | Kept according to the artifact policy (default: on failure only)                             |
 
 **Failure classification** (ADR-013). Each failed attempt gets one category: automation gap,
 configuration, test data, authentication, environment, API contract, unexpected API response, UI
@@ -165,17 +171,37 @@ sensitive, and keep CI retention short.
 ```text
 features/            Gherkin specifications
 src/bdd/             World, hooks, steps, parameter types
-src/domains/         Business domains (component-gallery: UI template, inventory: API template)
+src/domains/         Business domains (component-gallery: UI template, inventory: API template, healthcare: authentication, providers, appointments)
 src/interaction/ui/  BasePage, BaseComponent and generic components
 src/interaction/api/ ApiSession, HttpClient, auth strategies, SchemaValidator
 src/core/            Config, errors, failure classification, logging, security, artifacts, browser lifecycle, polling, test data
 reference-app/       Local synthetic app and API used by self-tests (no real data)
-tools/               Test runner, failure analysis, Gherkin linter, unused-step check
+tools/               Test runner, failure analysis, Gherkin linter, unused-step check, traceability
 config/environments/ Non-secret environment settings
 docs/architecture/   Architecture, ADRs, clarification list
+docs/traceability/   Requirements catalogue, traceability matrix, automation decisions
 .cursor/rules/       Governance rules RULE-001 … RULE-018
 tests/unit/          Unit tests for framework code
 ```
+
+## Healthcare use case and traceability
+
+The reference use case (ADR-014) covers portal sign-in, provider search, booking, the dashboard
+and cancellation. It runs against a synthetic patient portal in the local reference app
+(`npm run reference-app`, then open `/portal`). Booking rules come from
+`healthcare.appointmentPolicy` in the environment file; an environment without it fails the
+affected scenarios instead of guessing (clarifications C-04, C-06, C-08).
+
+Tags choose the sessions: `@ui` (browser), `@api` (API), `@integration` (UI + API in one
+scenario) and `@api-setup` (UI scenario that seeds its data through the API). `@manual` and
+`@blocked` scenarios are traced but never run.
+
+Every healthcare scenario carries `@REQ-…` and `@AC-…` tags that must exist in
+`docs/traceability/requirements/`. The committed
+[`traceability-matrix.md`](docs/traceability/traceability-matrix.md) shows the links and coverage
+without results; each run writes `reports/traceability/` with that run's results. Why each
+criterion is automated at its layer is in
+[`automation-decisions.md`](docs/traceability/automation-decisions.md).
 
 ## Data protection
 

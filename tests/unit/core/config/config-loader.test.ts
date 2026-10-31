@@ -119,6 +119,28 @@ describe('loadConfig', () => {
     );
   });
 
+  it('sets an appointment policy only where one is configured', () => {
+    const local = loadConfig({ source: new StaticEnvironmentSource({ TEST_ENV: 'local' }) });
+    assert.deepEqual(local.healthcare.appointmentPolicy, {
+      bookingHorizonDays: 30,
+      cancellationCutoffHours: 24,
+      reasonForVisitMaxLength: 200,
+    });
+    const qa = loadConfig({ source: new StaticEnvironmentSource(QA_URLS) });
+    assert.equal(qa.healthcare.appointmentPolicy, undefined);
+  });
+
+  it('rejects an appointment policy with impossible values', () => {
+    assert.throws(
+      () =>
+        loadConfig({
+          source: new StaticEnvironmentSource({ TEST_ENV: 'local' }),
+          overrides: { healthcare: { appointmentPolicy: { bookingHorizonDays: 0 } } },
+        }),
+      /bookingHorizonDays/,
+    );
+  });
+
   it('returns a deeply frozen configuration', () => {
     const config = loadConfig({ source: new StaticEnvironmentSource({ TEST_ENV: 'local' }) });
     assert.ok(Object.isFrozen(config));

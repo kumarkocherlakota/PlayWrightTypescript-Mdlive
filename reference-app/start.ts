@@ -27,7 +27,9 @@ function identityFromEnvironment(): IdentityOptions {
 
 startReferenceApp({ host: 'localhost', port, identity: identityFromEnvironment() }).then(
   (app) => {
-    console.log(`Synthetic reference app running at ${app.url}/gallery (Ctrl+C to stop)`);
+    console.log(
+      `Synthetic reference app running at ${app.url}/gallery and ${app.url}/portal (Ctrl+C to stop)`,
+    );
   },
   (error: unknown) => {
     console.error('Failed to start the reference app:', error);

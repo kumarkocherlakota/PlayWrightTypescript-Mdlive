@@ -7,5 +7,6 @@
   "allureFormatterOutput": "reports/cucumber/allure-formatter.out",
   "allureReport": "reports/allure-report",
   "allureHistory": "reports/allure-history/history.jsonl",
-  "analysisDirectory": "reports/analysis"
+  "analysisDirectory": "reports/analysis",
+  "traceabilityDirectory": "reports/traceability"
 }

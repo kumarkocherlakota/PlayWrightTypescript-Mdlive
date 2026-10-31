@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My appointments · Patient portal (synthetic)</title>
+    <link rel="stylesheet" href="/portal/assets/portal.css" />
+    <script src="/portal/assets/dashboard.js" type="module"></script>
+  </head>
+  <body>
+    <header>
+      <p class="banner">
+        Synthetic reference application for framework self-tests. It contains no real patient data
+        and is not a real healthcare service.
+      </p>
+      <nav aria-label="Portal">
+        <ul>
+          <li><a href="/portal/providers">Find a provider</a></li>
+          <li><a href="/portal/dashboard" aria-current="page">My appointments</a></li>
+        </ul>
+      </nav>
+      <form method="post" action="/portal/sign-out">
+        <button type="submit">Sign out</button>
+      </form>
+    </header>
+
+    <main>
+      <h1>My appointments</h1>
+
+      <p id="dashboard-error" class="error" role="alert" hidden></p>
+      <div id="dashboard-status" role="status" aria-live="polite"></div>
+
+      <p id="no-appointments" hidden>You have no appointments.</p>
+
+      <table aria-label="My appointments" hidden>
+        <thead>
+          <tr>
+            <th scope="col">Reference</th>
+            <th scope="col">Provider</th>
+            <th scope="col">Specialty</th>
+            <th scope="col">Date and time</th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <dialog aria-labelledby="cancel-title" aria-describedby="cancel-description">
+        <h2 id="cancel-title">Cancel appointment?</h2>
+        <p id="cancel-description"></p>
+        <button type="button" id="cancel-confirm">Confirm cancellation</button>
+        <button type="button" id="cancel-keep">Keep appointment</button>
+      </dialog>
+    </main>
+  </body>
+</html>

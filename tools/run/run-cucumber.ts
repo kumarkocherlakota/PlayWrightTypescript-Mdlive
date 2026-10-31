@@ -6,14 +6,16 @@
  * 2. For TEST_ENV=local only: when TEST_USER_EMAIL and TEST_USER_PASSWORD are both unset,
  *    generates throwaway synthetic values for the local reference app. They are passed only to
  *    the Cucumber child process and are never printed or written to disk.
- * 3. Runs Cucumber, then always writes the failure analysis, whether the run passed or failed.
- * The exit code is Cucumber's; a missing analysis turns a passing run into exit code 2.
+ * 3. Runs Cucumber, then always writes the failure analysis and the traceability matrix with
+ *    this run's execution results, whether the run passed or failed.
+ * The exit code is Cucumber's; a missing analysis or matrix turns a passing run into exit code 2.
  */
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { describeTotals, writeAnalysis } from '../failure-analysis/write-analysis';
+import { defaultTraceabilityPaths, writeMatrices } from '../traceability/write-matrix';
 import { REPORT_PATHS } from './report-paths';
 
 const env: Record<string, string | undefined> = { ...process.env };
@@ -34,9 +36,12 @@ if (env.TEST_ENV === 'local') {
 
 async function main(): Promise<void> {
   await Promise.all(
-    [REPORT_PATHS.allureResults, REPORT_PATHS.cucumberMessages, REPORT_PATHS.analysisDirectory].map(
-      (target) => rm(path.resolve(target), { recursive: true, force: true }),
-    ),
+    [
+      REPORT_PATHS.allureResults,
+      REPORT_PATHS.cucumberMessages,
+      REPORT_PATHS.analysisDirectory,
+      REPORT_PATHS.traceabilityDirectory,
+    ].map((target) => rm(path.resolve(target), { recursive: true, force: true })),
   );
 
   const exitCode = await runCucumber(process.argv.slice(2));
@@ -52,6 +57,23 @@ async function main(): Promise<void> {
     process.exitCode = exitCode;
   } catch (error: unknown) {
     console.error('Failure analysis could not be produced:', error);
+    process.exitCode = exitCode === 0 ? 2 : exitCode;
+  }
+  await writeRunTraceability(exitCode);
+}
+
+/** The committed matrix is left untouched here; only the run report is written. */
+async function writeRunTraceability(exitCode: number): Promise<void> {
+  const root = process.cwd();
+  try {
+    const { reportFile } = await writeMatrices(defaultTraceabilityPaths(root), {
+      updateCommittedMatrix: false,
+    });
+    if (reportFile !== undefined) {
+      console.log(`Traceability with execution results: ${path.relative(root, reportFile)}`);
+    }
+  } catch (error: unknown) {
+    console.error('Traceability matrix could not be produced:', error);
     process.exitCode = exitCode === 0 ? 2 : exitCode;
   }
 }
