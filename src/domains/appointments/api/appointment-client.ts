@@ -35,6 +35,18 @@ export class AppointmentClient {
       .appointments;
   }
 
+  public async attemptList(): Promise<RequestOutcome<readonly Appointment[]>> {
+    const response = await this.http.get(APPOINTMENTS);
+    return response.status === 200
+      ? {
+          accepted: true,
+          status: 200,
+          value: this.validator.validate(appointmentListSchema, response.body, 'appointment list')
+            .appointments,
+        }
+      : rejectionFrom(response, this.validator);
+  }
+
   /** Returns the appointment, or undefined when the service reports it does not exist. */
   public async find(id: string): Promise<Appointment | undefined> {
     const response = await this.http.get(appointmentPath(id), { expectedStatus: [200, 404] });

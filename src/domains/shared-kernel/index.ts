@@ -8,4 +8,5 @@ export {
   strategyWith,
   type CredentialProblem,
 } from './api/credential-problems';
+export { serviceClientOf } from './api/service-client';
 export type { RequestOutcome, RequestRejection } from './models/request-outcome';

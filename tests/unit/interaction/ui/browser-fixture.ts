@@ -33,7 +33,8 @@ export async function openBrowserFixture(
 ): Promise<BrowserFixture> {
   const context: BrowserContext = await browser.newContext({ baseURL: FIXTURE_ORIGIN });
   context.setDefaultTimeout(expectTimeoutMs);
-  context.setDefaultNavigationTimeout(expectTimeoutMs);
+  // Navigation is fixture setup, not the behaviour under test; short test timeouts must not apply.
+  context.setDefaultNavigationTimeout(10_000);
   const stubs = new Map<string, StubResponse>();
   await context.route('**/*', async (route) => {
     const stub = stubs.get(new URL(route.request().url()).pathname);

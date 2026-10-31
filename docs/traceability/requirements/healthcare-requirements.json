@@ -25,6 +25,36 @@
       ]
     },
     {
+      "id": "REQ-AUTH-002",
+      "title": "Portal session and response protections",
+      "statement": "The patient portal ends sessions reliably and tells browsers to apply standard protections to its pages.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-AUTH-002.1",
+          "text": "Signing out ends the session: the browser no longer holds a session, and the session from before signing out is no longer accepted."
+        },
+        {
+          "id": "AC-AUTH-002.2",
+          "text": "Portal pages are served with headers that forbid framing and inline scripts, prevent content-type sniffing and limit referrer information."
+        },
+        {
+          "id": "AC-AUTH-002.3",
+          "text": "An idle session expires after the configured session timeout. Blocked: the timeout is not confirmed (CLARIFICATIONS C-03), and checking it needs a way to expire sessions without waiting."
+        }
+      ]
+    },
+    {
+      "id": "REQ-AUTH-003",
+      "title": "Role-based API access",
+      "statement": "API callers can use only the capabilities their role grants.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-AUTH-003.1",
+          "text": "The service client can search the provider directory but can neither list nor book appointments. The service client's role is the reference identity provider's fixture rule (CLARIFICATIONS C-12)."
+        }
+      ]
+    },
+    {
       "id": "REQ-PROV-001",
       "title": "Provider search",
       "statement": "A member finds providers by name or specialty and sees their available times.",
@@ -151,6 +181,25 @@
         {
           "id": "AC-APPT-005.1",
           "text": "Appointments older than the retention period are no longer stored. Blocked: the retention period is not defined (CLARIFICATIONS C-11)."
+        }
+      ]
+    },
+    {
+      "id": "REQ-ACCESS-001",
+      "title": "Accessible patient portal",
+      "statement": "Members using assistive technology or only a keyboard can use the patient portal.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ACCESS-001.1",
+          "text": "Portal pages, including their error states, show no violations of the configured WCAG target (accessibility.standard) at or above the configured impact (accessibility.failOnImpact) in automated checks."
+        },
+        {
+          "id": "AC-ACCESS-001.2",
+          "text": "The sign-in form can be completed with the keyboard alone, in reading order, with a visible focus indicator on each control."
+        },
+        {
+          "id": "AC-ACCESS-001.3",
+          "text": "A screen-reader user can find a provider, book an appointment and cancel it. Manual: needs testing with assistive technology."
         }
       ]
     }

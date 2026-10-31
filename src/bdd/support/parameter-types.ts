@@ -2,6 +2,7 @@ import { defineParameterType } from '@cucumber/cucumber';
 import { FrameworkError } from '@core/errors';
 import { SENSITIVE_VALUE_TYPES } from '@core/test-data';
 import { APPOINTMENT_STATUSES, LIMIT_SIDES, POLICY_LIMITS } from '@domains/appointments';
+import { PORTAL_PAGES } from '@domains/authentication';
 import { ACCESS_METHODS } from '@domains/inventory';
 import { CREDENTIAL_PROBLEMS } from '@domains/shared-kernel';
 
@@ -19,6 +20,10 @@ export const REASON_LENGTHS = [
   'no characters',
 ] as const;
 export type ReasonLength = (typeof REASON_LENGTHS)[number];
+
+/** Requests a service client sends in role-based access scenarios. */
+export const SERVICE_CLIENT_REQUESTS = ['directory', 'appointment list', 'booking'] as const;
+export type ServiceClientRequest = (typeof SERVICE_CLIENT_REQUESTS)[number];
 
 /** Defines a parameter type accepting exactly one of `values` (longest alternatives first). */
 function defineEnumParameterType(name: string, values: readonly string[]): void {
@@ -45,3 +50,5 @@ defineEnumParameterType('reasonLength', REASON_LENGTHS);
 defineEnumParameterType('limitSide', LIMIT_SIDES);
 defineEnumParameterType('policyLimit', POLICY_LIMITS);
 defineEnumParameterType('appointmentStatus', APPOINTMENT_STATUSES);
+defineEnumParameterType('portalPage', Object.keys(PORTAL_PAGES));
+defineEnumParameterType('serviceClientRequest', SERVICE_CLIENT_REQUESTS);

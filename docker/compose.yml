@@ -1,0 +1,36 @@
+# Runs the suites in the test-runner image against the synthetic local reference app.
+#
+#   docker compose -f docker/compose.yml run --rm tests
+#   docker compose -f docker/compose.yml run --rm -e BROWSER=firefox -e SHARD=1/2 tests
+#
+# Credentials for remote environments come from your shell or a git-ignored .env file;
+# with TEST_ENV=local the runner generates throwaway synthetic ones.
+services:
+  tests:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: healthcare-tests:local
+    ipc: host
+    init: true
+    environment:
+      TEST_ENV: ${TEST_ENV:-local}
+      BROWSER: ${BROWSER:-chromium}
+      DEVICE: ${DEVICE:-}
+      SHARD: ${SHARD:-}
+      PARALLEL_WORKERS: ${PARALLEL_WORKERS:-2}
+      TAGS: ${TAGS:-}
+      TIMEZONE: ${TIMEZONE:-UTC}
+      LOCALE: ${LOCALE:-en-US}
+      UI_BASE_URL: ${UI_BASE_URL:-}
+      API_BASE_URL: ${API_BASE_URL:-}
+      AUTH_BASE_URL: ${AUTH_BASE_URL:-}
+      SECURITY_AUTHORIZED_HOSTS: ${SECURITY_AUTHORIZED_HOSTS:-}
+      TEST_USER_EMAIL: ${TEST_USER_EMAIL:-}
+      TEST_USER_PASSWORD: ${TEST_USER_PASSWORD:-}
+      API_CLIENT_ID: ${API_CLIENT_ID:-}
+      API_CLIENT_SECRET: ${API_CLIENT_SECRET:-}
+      API_KEY: ${API_KEY:-}
+    volumes:
+      - ../reports:/app/reports
+    command: ['npm', 'test']

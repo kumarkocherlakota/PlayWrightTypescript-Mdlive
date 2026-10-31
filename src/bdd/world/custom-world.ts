@@ -7,7 +7,7 @@ import type { ExecutionLogger, MemoryLogSink } from '@core/logging';
 import type { Redactor, SecretProvider } from '@core/security';
 import type { CleanupRegistry } from '@core/test-data';
 import type { ApiContext, ApiSession } from '@interaction/api';
-import type { UiContext } from '@interaction/ui';
+import { AccessibilityScanner, KeyboardNavigation, type UiContext } from '@interaction/ui';
 import { ScenarioContext } from './scenario-context';
 import type { ScenarioInfo, ScenarioRuntime } from './scenario-runtime';
 import type { ScenarioState } from './scenario-state';
@@ -83,6 +83,16 @@ export class CustomWorld extends World<WorldParameters> {
       logger: this.logger.child({ component: 'ui' }),
       expectTimeoutMs: this.config.ui.expectTimeoutMs,
     };
+  }
+
+  /** axe-core checks against the configured WCAG target (`accessibility.*`). */
+  public get accessibility(): AccessibilityScanner {
+    return new AccessibilityScanner(this.uiContext, this.config.accessibility);
+  }
+
+  /** Keyboard focus movement in the scenario's page. */
+  public get keyboard(): KeyboardNavigation {
+    return new KeyboardNavigation(this.uiContext);
   }
 
   public get hasUiSession(): boolean {

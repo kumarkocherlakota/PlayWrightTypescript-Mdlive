@@ -1,6 +1,11 @@
 import { ValidationError } from '@core/errors';
 import type { ApiContext } from '@interaction/api';
-import { strategyWith, type CredentialProblem, type RequestOutcome } from '@domains/shared-kernel';
+import {
+  serviceClientOf,
+  strategyWith,
+  type CredentialProblem,
+  type RequestOutcome,
+} from '@domains/shared-kernel';
 import { ProviderDirectoryClient } from '../api/provider-directory-client';
 import { ProviderTestDataClient } from '../api/provider-test-data-client';
 import { ProviderBuilder } from '../builders/provider-builder';
@@ -66,6 +71,14 @@ export class ProviderDirectoryWorkflow {
     return new ProviderDirectoryClient(http, this.api.session.validator).attemptSearch({
       limit: 1,
     });
+  }
+
+  /** Searches as the configured service client instead of the member. */
+  public attemptSearchAsServiceClient(): Promise<RequestOutcome<ProviderSearchResult>> {
+    return new ProviderDirectoryClient(
+      serviceClientOf(this.api.session),
+      this.api.session.validator,
+    ).attemptSearch({ limit: 1 });
   }
 
   public find(id: string): Promise<Provider | undefined> {

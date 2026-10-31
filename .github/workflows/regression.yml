@@ -1,0 +1,151 @@
+# Scheduled regression: every runnable scenario across Chromium, Firefox and WebKit, split into
+# shards, plus a mobile-viewport run; then one merged Allure report.
+#
+# Target environment: repository variable TEST_ENV (default local, the synthetic reference
+# app). For dev, qa or staging set the variables UI_BASE_URL, API_BASE_URL, AUTH_BASE_URL and
+# SECURITY_AUTHORIZED_HOSTS, and the secrets TEST_USER_EMAIL, TEST_USER_PASSWORD,
+# API_CLIENT_ID, API_CLIENT_SECRET (and API_KEY for api-key auth) in the GitHub environment
+# "regression", where required reviewers can guard access to them.
+# Values come only from ${{ secrets.* }}; GitHub masks them in logs.
+name: Regression
+
+on:
+  schedule:
+    - cron: '0 3 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    name: ${{ matrix.browser }}${{ matrix.device && format(' ({0})', matrix.device) || '' }} shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: regression
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        shard: ['1/3', '2/3', '3/3']
+        include:
+          - browser: chromium
+            device: Pixel 7
+            shard: '1/1'
+          - browser: webkit
+            device: iPhone 15
+            shard: '1/1'
+    env:
+      TEST_ENV: ${{ vars.TEST_ENV || 'local' }}
+      BROWSER: ${{ matrix.browser }}
+      DEVICE: ${{ matrix.device }}
+      SHARD: ${{ matrix.shard }}
+      PARALLEL_WORKERS: ${{ vars.PARALLEL_WORKERS || 2 }}
+      TIMEZONE: ${{ vars.TIMEZONE || 'UTC' }}
+      LOCALE: ${{ vars.LOCALE || 'en-US' }}
+      UI_BASE_URL: ${{ vars.UI_BASE_URL }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      AUTH_BASE_URL: ${{ vars.AUTH_BASE_URL }}
+      SECURITY_AUTHORIZED_HOSTS: ${{ vars.SECURITY_AUTHORIZED_HOSTS }}
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      API_CLIENT_ID: ${{ secrets.API_CLIENT_ID }}
+      API_CLIENT_SECRET: ${{ secrets.API_CLIENT_SECRET }}
+      API_KEY: ${{ secrets.API_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-framework
+        with:
+          browsers: ${{ matrix.browser }}
+
+      - name: Name this matrix entry
+        id: entry
+        env:
+          DEVICE_NAME: ${{ matrix.device }}
+          SHARD_NAME: ${{ matrix.shard }}
+        run: |
+          device="${DEVICE_NAME// /-}"
+          echo "id=${BROWSER}${device:+-$device}-${SHARD_NAME/\//-of-}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore flakiness history
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/flakiness/history.jsonl
+          key: flakiness-regression-${{ steps.entry.outputs.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: flakiness-regression-${{ steps.entry.outputs.id }}-
+
+      - name: Run regression
+        run: npm test
+
+      - name: Save flakiness history
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/flakiness/history.jsonl
+          key: flakiness-regression-${{ steps.entry.outputs.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Publish run summary
+        if: always()
+        run: |
+          for file in reports/analysis/failure-analysis.md reports/flakiness/flakiness-report.md; do
+            if [ -f "$file" ]; then cat "$file" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-results-${{ steps.entry.outputs.id }}
+          path: reports/allure-results/
+          if-no-files-found: warn
+          retention-days: ${{ vars.REPORT_RETENTION_DAYS || 7 }}
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-${{ steps.entry.outputs.id }}
+          path: |
+            reports/
+            !reports/allure-results/
+            !reports/allure-report/
+          if-no-files-found: warn
+          retention-days: ${{ vars.REPORT_RETENTION_DAYS || 7 }}
+
+  report:
+    name: Merged Allure report
+    needs: regression
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-framework
+
+      - name: Download Allure results of every shard
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: allure-results-*
+          path: reports/allure-results
+          merge-multiple: true
+
+      - name: Generate the report
+        run: npm run report:allure
+
+      - name: Scan the merged report for leaks
+        run: npm run security:scan-reports
+
+      - name: Upload the merged report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-report
+          path: reports/allure-report/
+          retention-days: ${{ vars.REPORT_RETENTION_DAYS || 7 }}

@@ -11,7 +11,8 @@ Regression suites must finish quickly across three browsers. Parallelism exposes
 
 - Cucumber `parallel` workers (`PARALLEL_WORKERS`, default `1` locally, CI sets it per runner).
 - Browser matrix in CI: one job per browser (`BROWSER=chromium|firefox|webkit`).
-- Sharding across CI jobs by splitting feature paths or tag expressions (Phase 6).
+- Sharding across CI jobs with `SHARD=<index>/<total>` (Cucumber's native round-robin shard,
+  ADR-016).
 - Retries only when `CI=true` (`RETRIES`, default `2` in CI, `0` locally). A scenario that passes
   on retry is reported as **flaky**, never as a clean pass.
 - No mutable module-level state except the per-process browser handle and frozen configuration.

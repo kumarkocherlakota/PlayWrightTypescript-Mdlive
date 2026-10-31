@@ -34,10 +34,14 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "arch:check": "depcruise src tests tools reference-app --config .dependency-cruiser.cjs",
-    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run arch:check && npm run test:unit && npm run bdd:lint && npm run traceability:check && npm run bdd:check && npm run bdd:unused",
-    "playwright:install": "playwright install"
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run arch:check && npm run test:unit && npm run agents:lint && npm run bdd:lint && npm run traceability:check && npm run bdd:check && npm run bdd:unused",
+    "playwright:install": "playwright install",
+    "agents:lint": "node --import tsx tools/agents/cli.ts",
+    "security:scan-reports": "node --import tsx tools/security/cli.ts",
+    "report:flakiness": "node --import tsx tools/flakiness/cli.ts"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@cucumber/cucumber": "13.3.0",
     "@cucumber/gherkin": "42.0.1",
     "@cucumber/messages": "34.2.1",
@@ -59,5 +63,10 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1",
     "zod": "4.6.7"
+  },
+  "overrides": {
+    "dompurify": "3.4.17",
+    "glob": "14.0.3",
+    "minimatch": "11.0.3"
   }
 }

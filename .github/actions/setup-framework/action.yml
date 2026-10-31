@@ -1,0 +1,43 @@
+name: Set up the test framework
+description: >-
+  Installs Node from .nvmrc and the locked dependencies (npm ci), and optionally Playwright
+  browsers with their system dependencies. Browser binaries are cached per lockfile; only
+  public npm and Playwright downloads are cached, never reports or credentials.
+inputs:
+  browsers:
+    description: Space-separated Playwright browsers to install; empty installs none.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci --no-audit --no-fund
+
+    - name: Cache Playwright browsers
+      if: inputs.browsers != ''
+      id: browser-cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ inputs.browsers }}-${{ hashFiles('package-lock.json') }}
+
+    - name: Install Playwright browsers
+      if: inputs.browsers != '' && steps.browser-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: npx playwright install --with-deps $BROWSERS
+
+    - name: Install browser system dependencies
+      if: inputs.browsers != '' && steps.browser-cache.outputs.cache-hit == 'true'
+      shell: bash
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: npx playwright install-deps $BROWSERS

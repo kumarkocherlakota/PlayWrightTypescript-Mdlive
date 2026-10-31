@@ -1,5 +1,5 @@
 import { request, type APIRequestContext } from '@playwright/test';
-import type { ApiConfig, AuthConfig } from '@core/config';
+import type { ApiAuthMethod, ApiConfig, AuthConfig } from '@core/config';
 import type { ExecutionLogger } from '@core/logging';
 import type { Redactor, Secret, SecretProvider } from '@core/security';
 import { NoAuth, type AuthStrategy } from './auth/auth-strategy';
@@ -70,6 +70,14 @@ export class ApiSession {
   /** Client for `api.baseUrl` with an explicit strategy, e.g. for negative security tests. */
   public clientWith(auth: AuthStrategy): HttpClient {
     return this.createClient(this.options.api.baseUrl, auth, 'api');
+  }
+
+  /**
+   * Strategy for another configured authentication method than `auth.apiMethod`, for example the
+   * service client (`oauth2-client-credentials`) in role-based access tests.
+   */
+  public strategyFor(method: ApiAuthMethod): AuthStrategy {
+    return createAuthStrategy(method, this.authDependencies);
   }
 
   /** OAuth 2.0 password-grant strategy for explicit (usually deliberately invalid) credentials. */
