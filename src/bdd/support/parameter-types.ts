@@ -1,6 +1,7 @@
 import { defineParameterType } from '@cucumber/cucumber';
 import { FrameworkError } from '@core/errors';
 import { SENSITIVE_VALUE_TYPES, type SensitiveValueType } from '@core/test-data';
+import { ACCESS_METHODS, type AccessMethod } from '@domains/inventory';
 
 export const DIALOG_CLOSE_METHODS = ['Close button', 'Escape key'] as const;
 export type DialogCloseMethod = (typeof DIALOG_CLOSE_METHODS)[number];
@@ -12,6 +13,18 @@ defineParameterType({
     const match = DIALOG_CLOSE_METHODS.find((method) => method === text);
     if (match === undefined) {
       throw new FrameworkError(`Unsupported dialog close method "${text}".`);
+    }
+    return match;
+  },
+});
+
+defineParameterType({
+  name: 'accessMethod',
+  regexp: new RegExp(ACCESS_METHODS.join('|')),
+  transformer: (text: string): AccessMethod => {
+    const match = ACCESS_METHODS.find((method) => method === text);
+    if (match === undefined) {
+      throw new FrameworkError(`Unsupported access method "${text}".`);
     }
     return match;
   },

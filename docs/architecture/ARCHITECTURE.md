@@ -1,6 +1,6 @@
 # Universal Playwright Automation Framework — Architecture Proposal
 
-Status: **Phases 1–2 implemented** · Reference domain: Healthcare · Reference workflow: Provider search and appointment booking
+Status: **Phases 1–3 implemented** · Reference domain: Healthcare · Reference workflow: Provider search and appointment booking
 
 This document is the architecture baseline. Every phase is reviewed against it. Decisions that
 change it must be recorded as an ADR under [`adr/`](./adr/).
@@ -9,18 +9,18 @@ change it must be recorded as an ADR under [`adr/`](./adr/).
 
 ## 1. Assumptions
 
-| ID   | Assumption                                                                                                                                                                                                     | Where it is configurable                           |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| A-01 | No live application or API is available while the framework is built. A local, clearly marked reference application (synthetic data only) will be provided in Phase 5 so the healthcare scenarios can execute. | `TEST_ENV=local`, `config/environments/local.json` |
-| A-02 | The default execution environment is `qa`. Its URLs are **not** committed; they are supplied through `UI_BASE_URL`, `API_BASE_URL` and `AUTH_BASE_URL`.                                                        | `.env` (local only) or CI variables                |
-| A-03 | Authentication is form-based login for the UI and an OAuth 2.0 token endpoint for the API. Both are strategies, so other methods can be added without changing callers.                                        | `auth.uiMethod`, `auth.apiMethod`                  |
-| A-04 | A single synthetic test user (`TEST_USER_EMAIL` / `TEST_USER_PASSWORD`) exists per environment. Data-mutating scenarios create their own records rather than reusing shared records.                           | Secrets via environment                            |
-| A-05 | The application exposes accessible roles and labels, or will add `data-testid` attributes where it does not.                                                                                                   | Locator strategy (ADR-005)                         |
-| A-06 | API payloads are JSON. FHIR R4 support is optional and disabled by default.                                                                                                                                    | `healthcare.fhir.enabled`                          |
-| A-07 | Accessibility target is WCAG 2.2 AA.                                                                                                                                                                           | `accessibility.standard`                           |
-| A-08 | Security tests are allowed only against hosts explicitly listed as authorized.                                                                                                                                 | `security.authorizedHosts`                         |
-| A-09 | Times are compared in an explicit time zone (default `UTC`).                                                                                                                                                   | `ui.timezoneId`                                    |
-| A-10 | Node.js 22 LTS or newer. TypeScript is pinned to 6.0.x because `typescript-eslint` does not yet support TypeScript 7.                                                                                          | `.nvmrc`, `package.json`                           |
+| ID   | Assumption                                                                                                                                                                                                                                                                                                                                | Where it is configurable                           |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| A-01 | No live application or API is available while the framework is built. A local, clearly marked reference application (synthetic data only) serves the framework self-tests: a component gallery (Phase 2) and an OAuth-protected inventory API (Phase 3). Phase 5 adds the healthcare app and API so the healthcare scenarios can execute. | `TEST_ENV=local`, `config/environments/local.json` |
+| A-02 | The default execution environment is `qa`. Its URLs are **not** committed; they are supplied through `UI_BASE_URL`, `API_BASE_URL` and `AUTH_BASE_URL`.                                                                                                                                                                                   | `.env` (local only) or CI variables                |
+| A-03 | Authentication is form-based login for the UI and an OAuth 2.0 token endpoint for the API. Both are strategies, so other methods can be added without changing callers.                                                                                                                                                                   | `auth.uiMethod`, `auth.apiMethod`                  |
+| A-04 | A single synthetic test user (`TEST_USER_EMAIL` / `TEST_USER_PASSWORD`) exists per environment. Data-mutating scenarios create their own records rather than reusing shared records.                                                                                                                                                      | Secrets via environment                            |
+| A-05 | The application exposes accessible roles and labels, or will add `data-testid` attributes where it does not.                                                                                                                                                                                                                              | Locator strategy (ADR-005)                         |
+| A-06 | API payloads are JSON. FHIR R4 support is optional and disabled by default.                                                                                                                                                                                                                                                               | `healthcare.fhir.enabled`                          |
+| A-07 | Accessibility target is WCAG 2.2 AA.                                                                                                                                                                                                                                                                                                      | `accessibility.standard`                           |
+| A-08 | Security tests are allowed only against hosts explicitly listed as authorized.                                                                                                                                                                                                                                                            | `security.authorizedHosts`                         |
+| A-09 | Times are compared in an explicit time zone (default `UTC`).                                                                                                                                                                                                                                                                              | `ui.timezoneId`                                    |
+| A-10 | Node.js 22 LTS or newer. TypeScript is pinned to 6.0.x because `typescript-eslint` does not yet support TypeScript 7.                                                                                                                                                                                                                     | `.nvmrc`, `package.json`                           |
 
 ## 2. Missing information (clarification list)
 
@@ -121,14 +121,14 @@ Forbidden directions (enforced in `.dependency-cruiser.cjs`):
 │   ├── architecture/
 │   │   ├── ARCHITECTURE.md
 │   │   ├── CLARIFICATIONS.md
-│   │   └── adr/                   # ADR-001 … ADR-010
+│   │   └── adr/                   # ADR-001 … ADR-012
 │   ├── onboarding/                # New-project onboarding guide (Phase 7)
 │   └── traceability/              # RTM and coverage summaries (Phase 5)
 ├── features/
 │   ├── framework/                 # Framework self-checks
 │   └── healthcare/
 │       └── appointments/          # Reference use case (Phase 5)
-├── reference-app/                 # Local synthetic healthcare app + API (Phase 5, clearly marked)
+├── reference-app/                 # Local synthetic app: gallery (2), identity + inventory API (3), healthcare (5)
 ├── src/
 │   ├── core/
 │   │   ├── artifacts/             # ArtifactManager
@@ -138,11 +138,13 @@ Forbidden directions (enforced in `.dependency-cruiser.cjs`):
 │   │   ├── logging/               # ExecutionLogger, sinks
 │   │   ├── polling/               # poll-until utilities (Phase 2/3)
 │   │   ├── security/              # Redactor, Secret, SecretProvider
-│   │   └── test-data/             # unique-id, seeded random (Phase 3/5)
+│   │   └── test-data/             # UniqueIdGenerator, CleanupRegistry (Phase 3); seeded random (Phase 5)
 │   ├── interaction/
 │   │   ├── ui/                    # BasePage, BaseComponent, generic components (Phase 2)
-│   │   └── api/                   # BaseHttpClient, auth strategies, schema validator (Phase 3)
+│   │   └── api/                   # ApiSession, HttpClient, auth strategies, SchemaValidator (Phase 3)
 │   ├── domains/
+│   │   ├── component-gallery/     # UI self-test domain and UI template (Phase 2)
+│   │   ├── inventory/             # API self-test domain and API template (Phase 3)
 │   │   ├── authentication/        # models, pages, api, workflows, index.ts
 │   │   ├── members/
 │   │   ├── providers/
@@ -214,15 +216,15 @@ must stop and return a clarification request.
 
 ## 8. Implementation phases
 
-| Phase | Scope                                                                                                                                                                                                                                     | Exit criteria                                                                           |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 1     | Architecture docs, ADRs, governance rules, Node/TS, Playwright, Cucumber, ESLint/Prettier, dependency boundaries, typed config, secrets, redaction, logging, errors, artifacts, World and hooks, framework self-check feature, unit tests | install, format, lint, type check, boundary check, unit tests, Cucumber run all succeed |
-| 2     | `BasePage`, `BaseComponent`, generic components, locator lint rules, synchronization strategy (ADR-011), polling, Gherkin lint, unused-step gate, local reference app with component gallery                                              | Phase 1 gates + UI self-tests on Chromium, Firefox and WebKit                           |
-| 3     | `BaseHttpClient`, auth strategies (OAuth2), domain API clients, models, builders, Ajv schemas, API assertions, setup/cleanup registry                                                                                                     | API self-tests against reference API                                                    |
-| 4     | Allure, failure artifacts (trace/video/console/network), `FailureAnalyzer`, report generation on failure                                                                                                                                  | Reports produced for passing and failing runs                                           |
-| 5     | Reference app + healthcare appointment use case (UI, API, UI+API), RTM, coverage summary                                                                                                                                                  | Scenarios executed against the local reference app only                                 |
-| 6     | Cursor agents, axe-core, security tests, browser matrix, sharding, GitHub Actions, Docker, flakiness analysis                                                                                                                             | CI workflow lint (actionlint) + local dry runs                                          |
-| 7     | README, onboarding guide, architecture/dependency/security reviews, final verification                                                                                                                                                    | Definition of Done checklist                                                            |
+| Phase | Scope                                                                                                                                                                                                                                                                                      | Exit criteria                                                                           |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| 1     | Architecture docs, ADRs, governance rules, Node/TS, Playwright, Cucumber, ESLint/Prettier, dependency boundaries, typed config, secrets, redaction, logging, errors, artifacts, World and hooks, framework self-check feature, unit tests                                                  | install, format, lint, type check, boundary check, unit tests, Cucumber run all succeed |
+| 2     | `BasePage`, `BaseComponent`, generic components, locator lint rules, synchronization strategy (ADR-011), polling, Gherkin lint, unused-step gate, local reference app with component gallery                                                                                               | Phase 1 gates + UI self-tests on Chromium, Firefox and WebKit                           |
+| 3     | `ApiSession`, `HttpClient`, auth strategies (OAuth 2.0 password and client credentials, API key), Ajv contract schemas, domain client with typed rejections, builders, business validators, unique IDs, cleanup registry and teardown (ADR-012), local identity provider and inventory API | Phase 2 gates + API self-tests against the local reference API                          |
+| 4     | Allure, failure artifacts (trace/video/console/network), `FailureAnalyzer`, report generation on failure                                                                                                                                                                                   | Reports produced for passing and failing runs                                           |
+| 5     | Reference app + healthcare appointment use case (UI, API, UI+API), RTM, coverage summary                                                                                                                                                                                                   | Scenarios executed against the local reference app only                                 |
+| 6     | Cursor agents, axe-core, security tests, browser matrix, sharding, GitHub Actions, Docker, flakiness analysis                                                                                                                                                                              | CI workflow lint (actionlint) + local dry runs                                          |
+| 7     | README, onboarding guide, architecture/dependency/security reviews, final verification                                                                                                                                                                                                     | Definition of Done checklist                                                            |
 
 ## 9. Risks and mitigations
 

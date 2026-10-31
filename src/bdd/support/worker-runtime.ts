@@ -4,6 +4,8 @@ import { BrowserManager } from '@core/browser';
 import { PROJECT_ROOT, type FrameworkConfig } from '@core/config';
 import { ConsoleLogSink, ExecutionLogger, FileLogSink, type LogSink } from '@core/logging';
 import { Redactor } from '@core/security';
+import { UniqueIdGenerator } from '@core/test-data';
+import { SchemaValidator } from '@interaction/api';
 import { AttemptTracker } from './attempt-tracker';
 
 /** Services shared by all scenarios of one worker process. None of them hold scenario state. */
@@ -14,6 +16,10 @@ export interface WorkerRuntime {
   readonly artifactManager: ArtifactManager;
   readonly browserManager: BrowserManager;
   readonly attempts: AttemptTracker;
+  /** Worker-scoped so identifiers stay unique across scenarios and retries in this process. */
+  readonly ids: UniqueIdGenerator;
+  /** Shared so compiled contract schemas are reused across scenarios. */
+  readonly schemaValidator: SchemaValidator;
 }
 
 export function createWorkerRuntime(config: FrameworkConfig): WorkerRuntime {
@@ -45,6 +51,12 @@ export function createWorkerRuntime(config: FrameworkConfig): WorkerRuntime {
     artifactManager,
     browserManager: new BrowserManager(config.ui, logger.child({ component: 'browser' })),
     attempts: new AttemptTracker(),
+    ids: new UniqueIdGenerator({
+      marker: config.healthcare.syntheticDataMarker,
+      runId: config.runId,
+      workerId: config.execution.workerId,
+    }),
+    schemaValidator: new SchemaValidator(),
   };
 }
 

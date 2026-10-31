@@ -1,12 +1,15 @@
 export { CONFIG_DEFAULTS, DEFAULT_ENVIRONMENT } from './config-defaults';
 export { loadConfig, type LoadConfigOptions } from './config-loader';
 export {
+  API_AUTH_METHODS,
   ARTIFACT_POLICIES,
   BROWSER_NAMES,
   LOG_LEVELS,
   SCREENSHOT_POLICIES,
   frameworkConfigSchema,
+  type ApiAuthMethod,
   type ApiConfig,
+  type AuthConfig,
   type ArtifactPolicy,
   type ArtifactsConfig,
   type BrowserName,

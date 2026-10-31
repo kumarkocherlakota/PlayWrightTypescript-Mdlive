@@ -2,6 +2,7 @@ import type { ScenarioArtifacts } from '@core/artifacts';
 import type { FrameworkConfig } from '@core/config';
 import type { ExecutionLogger, MemoryLogSink } from '@core/logging';
 import type { Redactor, SecretProvider } from '@core/security';
+import type { CleanupRegistry, UniqueIdGenerator } from '@core/test-data';
 
 export interface ScenarioInfo {
   /** Cucumber pickle id; identical across retries of the same scenario. */
@@ -24,4 +25,6 @@ export interface ScenarioRuntime {
   readonly redactor: Redactor;
   readonly secrets: SecretProvider;
   readonly artifacts: ScenarioArtifacts;
+  readonly ids: UniqueIdGenerator;
+  readonly cleanup: CleanupRegistry;
 }

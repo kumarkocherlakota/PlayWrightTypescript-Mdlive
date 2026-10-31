@@ -9,11 +9,18 @@ const httpUrl = (variable: string) =>
         : 'must be an http(s) URL',
   });
 const positiveMs = z.int().positive();
+const headerName = z.string().regex(/^[A-Za-z0-9-]+$/, 'must be an HTTP header name');
 
 export const BROWSER_NAMES = ['chromium', 'firefox', 'webkit'] as const;
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 export const ARTIFACT_POLICIES = ['off', 'on', 'retain-on-failure'] as const;
 export const SCREENSHOT_POLICIES = ['off', 'on', 'only-on-failure'] as const;
+export const API_AUTH_METHODS = [
+  'oauth2-password',
+  'oauth2-client-credentials',
+  'api-key',
+  'none',
+] as const;
 
 const timeZone = z.string().refine(isValidTimeZone, { error: 'must be a valid IANA time zone' });
 
@@ -42,12 +49,20 @@ export const frameworkConfigSchema = z.strictObject({
   api: z.strictObject({
     baseUrl: httpUrl('API_BASE_URL'),
     timeoutMs: positiveMs,
+    /** Responses slower than this are logged as warnings. */
     responseTimeThresholdMs: positiveMs,
+    /** Header that carries the scenario correlation ID on every request. */
+    correlationHeader: headerName,
   }),
   auth: z.strictObject({
     baseUrl: httpUrl('AUTH_BASE_URL'),
     uiMethod: z.enum(['form', 'sso', 'none']),
-    apiMethod: z.enum(['oauth2-password', 'oauth2-client-credentials', 'api-key', 'none']),
+    apiMethod: z.enum(API_AUTH_METHODS),
+    /** OAuth 2.0 token endpoint, relative to `auth.baseUrl`. */
+    tokenPath: z.string().regex(/^\/[\w./-]*$/, 'must be a path starting with "/"'),
+    /** Space-separated OAuth 2.0 scopes to request; omitted when not set. */
+    scope: z.string().min(1).optional(),
+    apiKeyHeader: headerName,
   }),
   execution: z.strictObject({
     ci: z.boolean(),
@@ -88,6 +103,8 @@ export const frameworkConfigSchema = z.strictObject({
 export type FrameworkConfig = z.infer<typeof frameworkConfigSchema>;
 export type UiConfig = FrameworkConfig['ui'];
 export type ApiConfig = FrameworkConfig['api'];
+export type AuthConfig = FrameworkConfig['auth'];
+export type ApiAuthMethod = AuthConfig['apiMethod'];
 export type ArtifactsConfig = FrameworkConfig['artifacts'];
 export type BrowserName = UiConfig['browser'];
 export type LogLevel = FrameworkConfig['logging']['level'];

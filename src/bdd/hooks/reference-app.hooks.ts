@@ -1,6 +1,8 @@
 import { AfterAll, BeforeAll, HookTarget } from '@cucumber/cucumber';
-import { getConfig } from '@core/config';
+import { getConfig, ProcessEnvironmentSource } from '@core/config';
 import { FrameworkError } from '@core/errors';
+import { EnvironmentSecretProvider, Redactor, type SecretProvider } from '@core/security';
+import type { IdentityOptions } from '@reference-app/identity';
 import { startReferenceApp, type ReferenceAppHandle } from '@reference-app/server';
 
 /**
@@ -15,10 +17,12 @@ BeforeAll({ name: 'Start reference app', on: HookTarget.COORDINATOR }, async fun
     return;
   }
   const target = new URL(config.ui.baseUrl);
+  const secrets = new EnvironmentSecretProvider(new ProcessEnvironmentSource(), new Redactor());
   try {
     referenceApp = await startReferenceApp({
       host: target.hostname,
       port: Number(target.port || 80),
+      identity: identityFrom(secrets),
     });
   } catch (error) {
     throw new FrameworkError(
@@ -32,3 +36,24 @@ AfterAll({ name: 'Stop reference app', on: HookTarget.COORDINATOR }, async funct
   await referenceApp?.close();
   referenceApp = undefined;
 });
+
+/**
+ * The synthetic identity provider accepts exactly the credentials configured for this run, so
+ * no account exists in source control. Values are revealed only to hand them to that provider.
+ */
+function identityFrom(secrets: SecretProvider): IdentityOptions {
+  const username = secrets.find('TEST_USER_EMAIL');
+  const password = secrets.find('TEST_USER_PASSWORD');
+  const clientId = secrets.find('API_CLIENT_ID');
+  const clientSecret = secrets.find('API_CLIENT_SECRET');
+  const apiKey = secrets.find('API_KEY');
+  return {
+    users:
+      username && password ? [{ username: username.reveal(), password: password.reveal() }] : [],
+    clients:
+      clientId && clientSecret
+        ? [{ clientId: clientId.reveal(), clientSecret: clientSecret.reveal() }]
+        : [],
+    apiKeys: apiKey ? [apiKey.reveal()] : [],
+  };
+}

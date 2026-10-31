@@ -3,6 +3,7 @@ import type { ITestCaseHookParameter } from '@cucumber/cucumber';
 import { ProcessEnvironmentSource } from '@core/config';
 import { ExecutionLogger, MemoryLogSink } from '@core/logging';
 import { EnvironmentSecretProvider, Redactor } from '@core/security';
+import { CleanupRegistry } from '@core/test-data';
 import type { ScenarioInfo, ScenarioRuntime } from '@bdd/world/scenario-runtime';
 import type { WorkerRuntime } from './worker-runtime';
 
@@ -42,6 +43,8 @@ export function createScenarioRuntime(
     redactor,
     secrets: new EnvironmentSecretProvider(new ProcessEnvironmentSource(), redactor),
     artifacts: worker.artifactManager.forScenario(scenario),
+    ids: worker.ids,
+    cleanup: new CleanupRegistry(logger.child({ component: 'cleanup' })),
   };
 }
 

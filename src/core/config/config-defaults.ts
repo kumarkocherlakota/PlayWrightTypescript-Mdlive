@@ -27,10 +27,13 @@ export const CONFIG_DEFAULTS: DeepPartial<FrameworkConfig> = {
   api: {
     timeoutMs: 30_000,
     responseTimeThresholdMs: 2_000,
+    correlationHeader: 'X-Correlation-Id',
   },
   auth: {
     uiMethod: 'form',
     apiMethod: 'oauth2-password',
+    tokenPath: '/token',
+    apiKeyHeader: 'X-API-Key',
   },
   execution: {
     ci: false,

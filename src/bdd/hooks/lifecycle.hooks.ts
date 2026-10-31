@@ -11,7 +11,10 @@ import {
 import { UiSession } from '@core/browser';
 import { getConfig } from '@core/config';
 import { serializeError } from '@core/errors';
+import { ApiSession } from '@interaction/api';
+import { finalizeApiSession } from '@bdd/support/api-session-finalizer';
 import { createScenarioRuntime } from '@bdd/support/scenario-runtime-factory';
+import { runTeardown } from '@bdd/support/scenario-teardown';
 import { finalizeUiSession } from '@bdd/support/ui-session-finalizer';
 import { createWorkerRuntime, describeRun } from '@bdd/support/worker-runtime';
 import type { CustomWorld } from '@bdd/world/custom-world';
@@ -49,12 +52,40 @@ Before({ name: 'Open UI session', tags: '@ui' }, async function (this: CustomWor
   );
 });
 
-// A single After hook keeps teardown order explicit: UI evidence, then logs.
+Before(
+  { name: 'Open API session', tags: '@api or @integration' },
+  async function (this: CustomWorld) {
+    this.attachApiSession(
+      await ApiSession.open({
+        api: this.config.api,
+        auth: this.config.auth,
+        logger: this.logger.child({ component: 'api-session' }),
+        redactor: this.redactor,
+        secrets: this.secrets,
+        correlationId: this.scenario.correlationId,
+        validator: worker.schemaValidator,
+      }),
+    );
+  },
+);
+
+// A single After hook keeps teardown order explicit: test-data cleanup (needs the API session),
+// API evidence, UI evidence, then logs. Every step runs even if an earlier one fails.
 After({ name: 'Finalize scenario' }, async function (this: CustomWorld, hook) {
   const status = hook.result?.status ?? Status.UNKNOWN;
   const failed = status === Status.FAILED;
   try {
-    await finalizeUiSession(this, failed);
+    await runTeardown(
+      [
+        {
+          name: 'test-data cleanup',
+          run: () => this.cleanup.runAllOrThrow().then(() => undefined),
+        },
+        { name: 'API session', run: () => finalizeApiSession(this, failed) },
+        { name: 'UI session', run: () => finalizeUiSession(this, failed) },
+      ],
+      this.logger,
+    );
   } finally {
     this.logger.info('Scenario finished', {
       status,

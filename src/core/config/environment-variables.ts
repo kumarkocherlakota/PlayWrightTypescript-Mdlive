@@ -9,6 +9,7 @@ export const CONFIG_VARIABLES = [
   'UI_BASE_URL',
   'API_BASE_URL',
   'AUTH_BASE_URL',
+  'API_AUTH_METHOD',
   'BROWSER',
   'BROWSER_CHANNEL',
   'DEVICE',
@@ -35,6 +36,7 @@ export const SECRET_VARIABLES = [
   'TEST_USER_PASSWORD',
   'API_CLIENT_ID',
   'API_CLIENT_SECRET',
+  'API_KEY',
 ] as const;
 
 export type ConfigVariableName = (typeof CONFIG_VARIABLES)[number];
