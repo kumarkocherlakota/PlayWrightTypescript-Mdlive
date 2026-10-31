@@ -8,5 +8,6 @@
   "allureReport": "reports/allure-report",
   "allureHistory": "reports/allure-history/history.jsonl",
   "analysisDirectory": "reports/analysis",
-  "traceabilityDirectory": "reports/traceability"
+  "traceabilityDirectory": "reports/traceability",
+  "flakinessDirectory": "reports/flakiness"
 }

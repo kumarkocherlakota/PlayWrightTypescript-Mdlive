@@ -8,6 +8,7 @@ const isCI = process.env.CI === 'true';
 const retries = isCI ? Number(process.env.RETRIES ?? 2) : 0;
 const workers = Number(process.env.PARALLEL_WORKERS ?? 0);
 const unset = 'not set (configuration default)';
+const shard = validShard(process.env.SHARD ?? '');
 // Manual and blocked scenarios document coverage for traceability; they are never executed.
 const runnable = 'not @wip and not @manual and not @blocked';
 
@@ -37,11 +38,14 @@ const base = {
       workers: String(workers),
       retries: String(retries),
       ci: String(isCI),
+      shard: shard === '' ? 'none' : shard,
     },
   },
   strict: true,
   retry: retries,
   parallel: workers,
+  // SHARD=<index>/<total>: Cucumber deals scenarios round-robin, so each runs in one shard.
+  shard,
   tags: process.env.TAGS ?? runnable,
 };
 
@@ -70,3 +74,15 @@ export const usageJson = {
   format: ['usage-json:reports/bdd/usage.json'],
   tags: automated,
 };
+
+/** Cucumber checks only the format; a 0 or out-of-range index would silently run nothing. */
+function validShard(value) {
+  if (value === '') {
+    return value;
+  }
+  const [index, total] = value.split('/').map(Number);
+  if (!/^\d+\/\d+$/.test(value) || index < 1 || index > total) {
+    throw new Error(`SHARD must be <index>/<total> with 1 <= index <= total, got "${value}".`);
+  }
+  return value;
+}

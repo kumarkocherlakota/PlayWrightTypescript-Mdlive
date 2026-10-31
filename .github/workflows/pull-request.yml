@@ -1,0 +1,97 @@
+# Pull-request gate: static quality gates, then smoke, API, UI and accessibility suites on
+# Chromium against the synthetic local reference app. No secrets are needed: for
+# TEST_ENV=local the runner generates throwaway synthetic credentials.
+name: Pull request
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TEST_ENV: local
+  BROWSER: chromium
+
+jobs:
+  validate:
+    name: Format, lint, typecheck, architecture, unit tests, BDD gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-framework
+        with:
+          # Accessibility and fixture unit tests drive a real Chromium.
+          browsers: chromium
+      - run: npm run validate
+
+  suites:
+    name: ${{ matrix.suite }} (chromium)
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: smoke
+            command: npm test -- --profile smoke
+          - suite: framework
+            command: npm run test:framework
+          - suite: api
+            command: npm test -- --profile api
+          - suite: ui
+            command: npm test -- --profile ui
+          - suite: accessibility
+            command: npm run test:healthcare -- --tags @accessibility
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-framework
+        with:
+          browsers: chromium
+
+      - name: Restore flakiness history
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/flakiness/history.jsonl
+          key: flakiness-${{ matrix.suite }}-chromium-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: flakiness-${{ matrix.suite }}-chromium-
+
+      - name: Run ${{ matrix.suite }} scenarios
+        run: ${{ matrix.command }}
+
+      - name: Save flakiness history
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/flakiness/history.jsonl
+          key: flakiness-${{ matrix.suite }}-chromium-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Publish run summary
+        if: always()
+        run: |
+          for file in reports/analysis/failure-analysis.md reports/flakiness/flakiness-report.md; do
+            if [ -f "$file" ]; then cat "$file" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-${{ matrix.suite }}-chromium
+          path: |
+            reports/
+            !reports/allure-report/
+          if-no-files-found: warn
+          retention-days: ${{ vars.REPORT_RETENTION_DAYS || 7 }}

@@ -3,8 +3,9 @@
 Playwright + TypeScript + Cucumber BDD framework for UI, API and UI+API testing, with a healthcare
 reference domain (provider search and appointment booking).
 
-> **Status: Phases 1–5 complete** (foundation, core UI framework, API framework, reporting and
-> failure analysis, healthcare use case with traceability). CI/agents (Phase 6) are planned in
+> **Status: Phases 1–6 complete** (foundation, core UI framework, API framework, reporting and
+> failure analysis, healthcare use case with traceability, and accessibility, security, CI,
+> Docker, flakiness analysis and Cursor agents). See
 > [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md). This README is
 > expanded in Phase 7.
 
@@ -39,7 +40,10 @@ problem stops the run with a `ConfigurationError` that lists each invalid settin
 | `API_AUTH_METHOD`                                  | `oauth2-password` (default), `oauth2-client-credentials`, `api-key` or `none` |
 | `API_CLIENT_ID`, `API_CLIENT_SECRET`, `API_KEY`    | Secrets for the client-credentials grant or API-key auth                      |
 | `BROWSER`, `BROWSER_CHANNEL`, `DEVICE`, `HEADLESS` | Browser selection                                                             |
+| `LOCALE`, `TIMEZONE`                               | Browser locale and time zone                                                  |
 | `PARALLEL_WORKERS`, `CI`, `RETRIES`, `TAGS`        | Runner switches (retries apply only when `CI=true`)                           |
+| `SHARD`                                            | `<index>/<total>`: run one shard of the selected scenarios                    |
+| `SECURITY_AUTHORIZED_HOSTS`                        | Hosts `@security` scenarios may run against (comma-separated, `*.domain`)     |
 
 See [`.env.example`](.env.example) for the full list.
 
@@ -63,6 +67,9 @@ See [`.env.example`](.env.example) for the full list.
 | `npm run arch:check`                                              | Layer, domain-boundary and circular-dependency rules                                |
 | `npm run report:allure` / `report:open`                           | Builds `reports/allure-report` from the last run (with trend history) / serves it   |
 | `npm run report:analyze`                                          | Re-runs the failure analysis on the last run's `reports/cucumber/messages.ndjson`   |
+| `npm run report:flakiness [browser]`                              | Adds the last run to `reports/flakiness/history.jsonl` and rewrites the report      |
+| `npm run security:scan-reports`                                   | Scans `reports/` for unredacted secrets and personal data (exit 1 on findings)      |
+| `npm run agents:lint`                                             | Checks the Cursor agent definitions in `.cursor/agents`                             |
 | `npm run reference-app`                                           | Starts the local synthetic reference app at `http://localhost:4000/gallery`         |
 
 Examples:
@@ -71,7 +78,9 @@ Examples:
 PARALLEL_WORKERS=4 npm run test:framework
 BROWSER=firefox npm run test:framework
 PARALLEL_WORKERS=4 npm run test:healthcare
-npx cucumber-js --profile framework --tags "@security"
+DEVICE="iPhone 15" BROWSER=webkit npm run test:healthcare
+SHARD=2/3 npm run test:healthcare                   # second of three shards
+npm run test:healthcare -- --tags @accessibility    # narrows the profile's tags
 ```
 
 ## Writing UI tests
@@ -176,11 +185,14 @@ src/interaction/ui/  BasePage, BaseComponent and generic components
 src/interaction/api/ ApiSession, HttpClient, auth strategies, SchemaValidator
 src/core/            Config, errors, failure classification, logging, security, artifacts, browser lifecycle, polling, test data
 reference-app/       Local synthetic app and API used by self-tests (no real data)
-tools/               Test runner, failure analysis, Gherkin linter, unused-step check, traceability
+tools/               Test runner, failure analysis, Gherkin linter, unused-step check, traceability, agent lint, report leak scan, flakiness history
 config/environments/ Non-secret environment settings
 docs/architecture/   Architecture, ADRs, clarification list
 docs/traceability/   Requirements catalogue, traceability matrix, automation decisions
 .cursor/rules/       Governance rules RULE-001 … RULE-018
+.cursor/agents/      Sixteen specialized Cursor agents
+.github/             CI workflows, shared setup action, Dependabot
+docker/              Test-runner image and compose file
 tests/unit/          Unit tests for framework code
 ```
 
@@ -202,6 +214,68 @@ Every healthcare scenario carries `@REQ-…` and `@AC-…` tags that must exist 
 without results; each run writes `reports/traceability/` with that run's results. Why each
 criterion is automated at its layer is in
 [`automation-decisions.md`](docs/traceability/automation-decisions.md).
+
+## Accessibility testing
+
+`checkAccessibility(world, label)` runs axe-core against `accessibility.standard` (default
+`wcag22aa`; also `wcag2a`, `wcag2aa`, `wcag21aa`) and fails on violations at or above
+`accessibility.failOnImpact` (default `serious`). Each scan is attached as
+`accessibility-scan.json` with rule IDs, impact, help links and element targets, never page HTML.
+Keyboard scenarios tab through a page and assert each control's role, accessible name and
+visible focus indicator. Automated checks find only part of the WCAG failures and do not replace
+manual testing with keyboard and screen readers (ADR-015).
+
+## Security testing
+
+`@security` scenarios cover sign-out and session reuse, security response headers and
+scope-based API authorization. They run only when the UI, API and identity hosts are all listed
+in `security.authorizedHosts` (`SECURITY_AUTHORIZED_HOSTS`); otherwise they are skipped with the
+reason attached. After every run the runner scans `reports/` for unredacted tokens, card numbers
+and personal data, and for this run's actual credential values; findings fail the run and
+print only file, line and kind.
+
+## Flakiness
+
+Every run appends each scenario's result to `reports/flakiness/history.jsonl` (last 30 runs, per
+browser). `reports/flakiness/flakiness-report.md` lists scenarios that both passed and failed or
+passed only on retry, with a flip rate, and separately those that failed every time. Fix the
+cause; do not add waits or retries (RULE-006).
+
+## Continuous integration
+
+| Workflow           | Trigger                    | What it runs                                                                       |
+| ------------------ | -------------------------- | ---------------------------------------------------------------------------------- |
+| `pull-request.yml` | pull request, push to main | `npm run validate`; smoke, framework, API, UI and accessibility suites on Chromium |
+| `regression.yml`   | weekdays 03:00 UTC, manual | Chromium, Firefox, WebKit × 3 shards, Pixel 7 and iPhone 15; merged Allure report  |
+| `security.yml`     | pull request, push, weekly | `npm audit`, dependency review, CodeQL, gitleaks, `@security` scenarios            |
+
+Actions are pinned to commit SHAs and the token is read-only. Pull-request runs use the local
+reference app and need no secrets. For a remote environment set the repository variables
+`TEST_ENV`, `UI_BASE_URL`, `API_BASE_URL`, `AUTH_BASE_URL` and `SECURITY_AUTHORIZED_HOSTS`, and the
+secrets `TEST_USER_EMAIL`, `TEST_USER_PASSWORD`, `API_CLIENT_ID`, `API_CLIENT_SECRET` (and
+`API_KEY`) in the `regression` environment. Never write a secret value into a workflow file.
+Reports are uploaded as artifacts kept for `REPORT_RETENTION_DAYS` days (default 7) and the
+failure and flakiness summaries appear on the job page.
+
+## Docker
+
+```bash
+docker compose -f docker/compose.yml run --rm tests npm run test:healthcare
+docker compose -f docker/compose.yml run --rm -e BROWSER=firefox -e SHARD=1/2 tests
+```
+
+The image (`docker/Dockerfile`) uses the Playwright image matching the locked Playwright
+version and runs as the non-root `pwuser`; reports are written to the mounted `reports/`
+directory, which must be writable by the image's `pwuser`. Credentials are never built into the image.
+
+## Cursor agents
+
+`.cursor/agents/` holds sixteen project agents (architecture, requirements, scenarios,
+automation selection, locators, page objects, API tests, test data, healthcare domain,
+security, accessibility, flakiness, failure analysis, code review, documentation). Each defines
+its input, output, restrictions, escalation rules, the files it may and must not modify and a
+validation checklist, and must never fabricate requirements, locators, API responses or results.
+Review agents are read-only. `npm run agents:lint` checks the definitions (ADR-017).
 
 ## Data protection
 

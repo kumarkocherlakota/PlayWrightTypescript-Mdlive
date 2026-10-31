@@ -1,3 +1,22 @@
+export {
+  AccessibilityScanner,
+  assertNoBlockingViolations,
+  MANUAL_TESTING_NOTE,
+  type AccessibilityScanResult,
+  type AccessibilityViolation,
+} from './accessibility/accessibility-scanner';
+export {
+  focusNextKey,
+  KeyboardNavigation,
+  type FocusStop,
+} from './accessibility/keyboard-navigation';
+export {
+  axeTagsFor,
+  IMPACT_LEVELS,
+  reachesThreshold,
+  type AccessibilityStandard,
+  type ImpactLevel,
+} from './accessibility/wcag-target';
 export { BaseComponent } from './base-component';
 export { BasePage } from './base-page';
 export { DialogComponent } from './components/dialog-component';

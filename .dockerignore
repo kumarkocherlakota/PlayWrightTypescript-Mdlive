@@ -1,0 +1,17 @@
+# Keep secrets, results and local tooling out of the build context.
+.env
+.env.*
+!.env.example
+.auth/
+.git/
+node_modules/
+reports/
+allure-results/
+allure-report/
+test-results/
+playwright-report/
+coverage/
+*.log
+.DS_Store
+.eslintcache
+.cursor/

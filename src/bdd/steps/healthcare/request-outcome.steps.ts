@@ -8,7 +8,7 @@ import type { RequestKind } from './healthcare-state';
  * outlines can mix accepted, invalid-field and refused outcomes in one Examples table.
  */
 Then(
-  /^the (directory|booking|cancellation) request is (?:accepted|rejected because "([^"]+)" is invalid|refused with status (\d+) and error "([^"]+)")$/,
+  /^the (directory|appointment list|booking|cancellation) request is (?:accepted|rejected because "([^"]+)" is invalid|refused with status (\d+) and error "([^"]+)")$/,
   function (
     this: CustomWorld,
     kind: RequestKind,

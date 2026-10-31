@@ -6,7 +6,7 @@ import type { RequestOutcome } from '@domains/shared-kernel';
 import type { Ordinal, ReasonLength } from '@bdd/support/parameter-types';
 import type { CustomWorld } from '@bdd/world/custom-world';
 
-export type RequestKind = 'directory' | 'booking' | 'cancellation';
+export type RequestKind = 'directory' | 'appointment list' | 'booking' | 'cancellation';
 
 declare module '@bdd/world/scenario-state' {
   interface ScenarioState {

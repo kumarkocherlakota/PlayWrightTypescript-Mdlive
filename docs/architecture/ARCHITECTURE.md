@@ -1,6 +1,6 @@
 # Universal Playwright Automation Framework — Architecture Proposal
 
-Status: **Phases 1–5 implemented** · Reference domain: Healthcare · Reference workflow: Provider search and appointment booking
+Status: **Phases 1–6 implemented** · Reference domain: Healthcare · Reference workflow: Provider search and appointment booking
 
 This document is the architecture baseline. Every phase is reviewed against it. Decisions that
 change it must be recorded as an ADR under [`adr/`](./adr/).
@@ -75,6 +75,9 @@ A **layered, domain-modular** architecture with **dependency inversion** at the 
 - **Lifecycle:** one browser **per worker process**, one `BrowserContext` **per scenario** (ADR-004). Browsers launch lazily only for `@ui` and `@integration` scenarios, so API-only runs never start a browser.
 - **Errors:** `FrameworkError` hierarchy with an error `code`, structured `context` and native `cause`. Errors are never swallowed; they are wrapped with context and rethrown.
 - **Observability:** a scenario-scoped `ExecutionLogger` (structured JSON entries with correlation ID, scenario, browser, environment, retry attempt) plus an `ArtifactManager` that owns all output paths. A single failure classifier (`src/core/failure-analysis`, Phase 4) labels each failed attempt in the `After` hook, in the post-run analysis (`reports/analysis`) and in Allure categories (ADR-013).
+- **Accessibility:** `AccessibilityScanner` runs axe-core with the tags of `accessibility.standard` (default WCAG 2.2 AA) and fails at or above `accessibility.failOnImpact`; every scan is attached as `accessibility-scan.json`. `KeyboardNavigation` records focus order, accessible names and focus visibility. Automated checks find only part of the WCAG failures and do not replace manual testing (ADR-015).
+- **Security testing:** `@security` scenarios run only when every target host is in `security.authorizedHosts`; otherwise they are skipped with the reason attached. After each run the reports are scanned for unredacted secrets, this run's credential values and personal data; a finding fails the run (ADR-015).
+- **CI/CD:** GitHub Actions for pull requests, scheduled regression (browser matrix × Cucumber shards, mobile viewports, merged Allure report) and security (npm audit, dependency review, CodeQL, gitleaks). Actions are pinned to commit SHAs; secrets come only from `secrets.*`; artifact retention from `vars.REPORT_RETENTION_DAYS` (ADR-016).
 - **Parallel safety:** no mutable module state except the per-process browser handle and the frozen config. Scenario state lives in the World. Test data is unique per scenario (run ID + worker ID + sequence).
 
 ## 4. Dependency-direction diagram
@@ -114,15 +117,15 @@ Forbidden directions (enforced in `.dependency-cruiser.cjs`):
 ├── .cursor/
 │   ├── rules/                     # Architecture governance (RULE-001 … RULE-018)
 │   └── agents/                    # Specialized Cursor agents (Phase 6)
-├── .github/workflows/             # CI pipelines (Phase 6)
+├── .github/workflows/             # pull request, regression, security pipelines (Phase 6)
 ├── config/
 │   └── environments/              # local.json, dev.json, qa.json, staging.json (no secrets)
-├── docker/                        # Dockerfile / compose (Phase 6)
+├── docker/                        # test-runner image and compose file (Phase 6)
 ├── docs/
 │   ├── architecture/
 │   │   ├── ARCHITECTURE.md
 │   │   ├── CLARIFICATIONS.md
-│   │   └── adr/                   # ADR-001 … ADR-014
+│   │   └── adr/                   # ADR-001 … ADR-017
 │   ├── onboarding/                # New-project onboarding guide (Phase 7)
 │   └── traceability/              # requirements catalogue, generated RTM, automation decisions (Phase 5)
 ├── features/
@@ -144,7 +147,7 @@ Forbidden directions (enforced in `.dependency-cruiser.cjs`):
 │   │   ├── security/              # Redactor, Secret, SecretProvider
 │   │   └── test-data/             # UniqueIdGenerator, CleanupRegistry (Phase 3); seeded random (Phase 5)
 │   ├── interaction/
-│   │   ├── ui/                    # BasePage, BaseComponent, generic components (Phase 2)
+│   │   ├── ui/                    # BasePage, BaseComponent, generic components (Phase 2); accessibility scanner, keyboard navigation (6)
 │   │   └── api/                   # ApiSession, HttpClient, auth strategies, SchemaValidator (Phase 3)
 │   ├── domains/
 │   │   ├── component-gallery/     # UI self-test domain and UI template (Phase 2)
@@ -162,7 +165,7 @@ Forbidden directions (enforced in `.dependency-cruiser.cjs`):
 │       └── support/               # parameter types
 ├── tests/
 │   └── unit/                      # Unit tests for reusable framework code (RULE-012)
-├── tools/                         # test runner, failure analysis, gherkin lint, unused steps; traceability (Phase 5)
+├── tools/                         # test runner, failure analysis, gherkin lint, unused steps; traceability (5); agent lint, report leak scan, flakiness history (6)
 └── reports/                       # generated, git-ignored
 ```
 
@@ -199,36 +202,38 @@ must not modify, and a validation checklist. **No agent may fabricate requiremen
 responses, execution results, test results or domain rules.** When evidence is missing the agent
 must stop and return a clarification request.
 
-| #   | Agent                | Single responsibility                                                    | May modify                                                                       |
-| --- | -------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| 1   | Framework Architect  | Evolve the architecture and write ADRs                                   | `docs/architecture/**`                                                           |
-| 2   | Architecture Review  | Detect layer/boundary/SOLID violations (read-only report)                | none                                                                             |
-| 3   | Requirement Analysis | Turn requirements into acceptance criteria, assumptions, gaps            | `docs/traceability/requirements/**`                                              |
-| 4   | Scenario Generation  | Write Gherkin from approved acceptance criteria                          | `features/**`                                                                    |
-| 5   | Automation Selection | Decide UI / API / integration / manual per scenario, with reasons        | `docs/traceability/**`                                                           |
-| 6   | Locator              | Extract and validate locators from DOM / a11y tree / screenshot evidence | locator sections of `src/domains/*/pages                                         | components/**` |
-| 7   | Page Object          | Create pages and components using validated locators                     | `src/domains/*/pages/**`, `src/domains/*/components/**`, `src/interaction/ui/**` |
-| 8   | API Test             | Typed clients, models, schemas, builders, API features                   | `src/domains/*/api                                                               | models         | schemas | builders/**`, `features/**/api/**` |
-| 9   | Test Data            | Synthetic data factories, setup/cleanup services                         | `src/domains/*/builders/**`, `src/core/test-data/**`                             |
-| 10  | Healthcare Domain    | Validate domain terminology, privacy, FHIR mapping                       | `src/domains/*/models/**`, `docs/healthcare/**`                                  |
-| 11  | Security Review      | Secrets, PHI/PII exposure, authz coverage (report + fixes in tests)      | `features/**/security/**`, `src/core/security/**`                                |
-| 12  | Accessibility        | axe integration and keyboard/focus scenarios                             | `features/**/accessibility/**`, `src/interaction/ui/accessibility/**`            |
-| 13  | Flakiness Analysis   | Analyze retries/history; never "fix" by adding waits                     | `docs/quality/flakiness/**`                                                      |
-| 14  | Failure Analysis     | Classify failures from real artifacts                                    | `reports/analysis/**`                                                            |
-| 15  | Code Review          | Review diffs against `.cursor/rules`                                     | none                                                                             |
-| 16  | Documentation        | README, onboarding, guides                                               | `README.md`, `docs/**` (not ADRs)                                                |
+| #   | Agent                | File (`.cursor/agents/`)  | Single responsibility                                                    | Read-only | May modify                                                                                        |
+| --- | -------------------- | ------------------------- | ------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------- |
+| 1   | Framework Architect  | `framework-architect.md`  | Evolve the architecture and write ADRs                                   | no        | `docs/architecture/**`; `.cursor/rules/**` only with an ADR                                       |
+| 2   | Architecture Review  | `architecture-review.md`  | Detect layer, boundary and SOLID violations                              | yes       | none                                                                                              |
+| 3   | Requirement Analysis | `requirement-analysis.md` | Turn requirements into acceptance criteria, assumptions, gaps            | no        | `docs/traceability/requirements/**`, `CLARIFICATIONS.md`                                          |
+| 4   | Scenario Generation  | `scenario-generation.md`  | Write Gherkin from approved acceptance criteria                          | no        | `features/**`                                                                                     |
+| 5   | Automation Selection | `automation-selection.md` | Decide UI / API / UI + API / manual / blocked, with reasons              | no        | `docs/traceability/automation-decisions.md`, type and mode tags                                   |
+| 6   | Locator              | `locator.md`              | Extract and validate locators from DOM, a11y tree or screenshot evidence | no        | locator fields in `src/domains/*/pages/**` and `components/**`                                    |
+| 7   | Page Object          | `page-object.md`          | Create pages and components using validated locators                     | no        | `src/domains/*/pages/**`, `components/**`, `src/interaction/ui/**` and its tests                  |
+| 8   | API Test             | `api-test.md`             | Typed clients, models, schemas, builders, API scenarios                  | no        | `src/domains/*/{api,models,schemas,builders,validators,workflows}/**`, `@api` scenarios and steps |
+| 9   | Test Data            | `test-data.md`            | Synthetic data builders, setup and cleanup services                      | no        | `src/domains/*/builders/**`, `src/core/test-data/**` and its tests                                |
+| 10  | Healthcare Domain    | `healthcare-domain.md`    | Validate terminology, privacy handling, FHIR mapping                     | no        | `src/domains/*/models/**`, `CLARIFICATIONS.md`                                                    |
+| 11  | Security Review      | `security-review.md`      | Secrets, PHI/PII exposure, authN/authZ coverage; adds security tests     | no        | `@security` scenarios and steps, `src/core/security/**` and its tests                             |
+| 12  | Accessibility        | `accessibility.md`        | axe integration and keyboard/focus scenarios                             | no        | `src/interaction/ui/accessibility/**` and its tests, `@accessibility` scenarios and steps         |
+| 13  | Flakiness Analysis   | `flakiness-analysis.md`   | Explain unstable scenarios from retry and run history; never adds waits  | yes       | none                                                                                              |
+| 14  | Failure Analysis     | `failure-analysis.md`     | Classify failures from real run artifacts                                | no        | `reports/analysis/**` (generated)                                                                 |
+| 15  | Code Review          | `code-review.md`          | Review diffs against `.cursor/rules`                                     | yes       | none                                                                                              |
+| 16  | Documentation        | `documentation.md`        | README, onboarding, guides                                               | no        | `README.md`, `docs/**` except ADRs and generated files                                            |
+
+`npm run agents:lint` (part of `npm run validate`) checks that every definition has these sections in order, the never-fabricate list, a name matching the file, and that read-only agents modify nothing (ADR-017).
 
 ## 8. Implementation phases
 
-| Phase | Scope                                                                                                                                                                                                                                                                                                                             | Exit criteria                                                                           |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 1     | Architecture docs, ADRs, governance rules, Node/TS, Playwright, Cucumber, ESLint/Prettier, dependency boundaries, typed config, secrets, redaction, logging, errors, artifacts, World and hooks, framework self-check feature, unit tests                                                                                         | install, format, lint, type check, boundary check, unit tests, Cucumber run all succeed |
-| 2     | `BasePage`, `BaseComponent`, generic components, locator lint rules, synchronization strategy (ADR-011), polling, Gherkin lint, unused-step gate, local reference app with component gallery                                                                                                                                      | Phase 1 gates + UI self-tests on Chromium, Firefox and WebKit                           |
-| 3     | `ApiSession`, `HttpClient`, auth strategies (OAuth 2.0 password and client credentials, API key), Ajv contract schemas, domain client with typed rejections, builders, business validators, unique IDs, cleanup registry and teardown (ADR-012), local identity provider and inventory API                                        | Phase 2 gates + API self-tests against the local reference API                          |
-| 4     | Allure 3 results, report and history; Cucumber messages stream; failure evidence (screenshot, video, console/network/HTTP-error diagnostics, trace by path); one failure classifier shared by the After hook, the post-run analysis and Allure categories; flaky detection for retries; one runner for all test scripts (ADR-013) | Reports produced for passing and failing runs                                           |
-| 5     | Reference patient portal and healthcare APIs; authentication, providers and appointments domains; UI, API and UI + API scenarios (positive, negative, boundary, security, accessibility); policy from configuration; generated traceability matrix with coverage summaries and per-run results (ADR-014)                          | Scenarios executed against the local reference app only                                 |
-| 6     | Cursor agents, axe-core, security tests, browser matrix, sharding, GitHub Actions, Docker, flakiness analysis                                                                                                                                                                                                                     | CI workflow lint (actionlint) + local dry runs                                          |
-| 7     | README, onboarding guide, architecture/dependency/security reviews, final verification                                                                                                                                                                                                                                            | Definition of Done checklist                                                            |
+| Phase | Scope                                                                                                                                                                                                                                                                                                                             | Exit criteria                                                                                         |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1     | Architecture docs, ADRs, governance rules, Node/TS, Playwright, Cucumber, ESLint/Prettier, dependency boundaries, typed config, secrets, redaction, logging, errors, artifacts, World and hooks, framework self-check feature, unit tests                                                                                         | install, format, lint, type check, boundary check, unit tests, Cucumber run all succeed               |
+| 2     | `BasePage`, `BaseComponent`, generic components, locator lint rules, synchronization strategy (ADR-011), polling, Gherkin lint, unused-step gate, local reference app with component gallery                                                                                                                                      | Phase 1 gates + UI self-tests on Chromium, Firefox and WebKit                                         |
+| 3     | `ApiSession`, `HttpClient`, auth strategies (OAuth 2.0 password and client credentials, API key), Ajv contract schemas, domain client with typed rejections, builders, business validators, unique IDs, cleanup registry and teardown (ADR-012), local identity provider and inventory API                                        | Phase 2 gates + API self-tests against the local reference API                                        |
+| 4     | Allure 3 results, report and history; Cucumber messages stream; failure evidence (screenshot, video, console/network/HTTP-error diagnostics, trace by path); one failure classifier shared by the After hook, the post-run analysis and Allure categories; flaky detection for retries; one runner for all test scripts (ADR-013) | Reports produced for passing and failing runs                                                         |
+| 5     | Reference patient portal and healthcare APIs; authentication, providers and appointments domains; UI, API and UI + API scenarios (positive, negative, boundary, security, accessibility); policy from configuration; generated traceability matrix with coverage summaries and per-run results (ADR-014)                          | Scenarios executed against the local reference app only                                               |
+| 6     | Cursor agents, axe-core, security tests, browser matrix, sharding, GitHub Actions, Docker, flakiness analysis                                                                                                                                                                                                                     | actionlint on the workflows; cross-browser, parallel and sharded runs against the local reference app |
+| 7     | README, onboarding guide, architecture/dependency/security reviews, final verification                                                                                                                                                                                                                                            | Definition of Done checklist                                                                          |
 
 ## 9. Risks and mitigations
 
@@ -239,7 +244,7 @@ must stop and return a clarification request.
 | Architecture erosion over time                    | Unmaintainable framework           | `dependency-cruiser` boundaries, ESLint restrictions, Cursor rules, Architecture Review agent                                 |
 | Flaky tests hidden by retries                     | False confidence                   | Retries only in CI, retried-then-passed scenarios reported as flaky, no `waitForTimeout` (lint error)                         |
 | Shared accounts mutated in parallel               | Non-deterministic failures         | Unique data per scenario, API-based setup/cleanup, per-scenario context                                                       |
-| Tooling version drift (TS 7 vs typescript-eslint) | Broken lint                        | TypeScript pinned to 6.0.x; Dependabot/renovate in Phase 6                                                                    |
+| Tooling version drift (TS 7 vs typescript-eslint) | Broken lint                        | TypeScript pinned to 6.0.x; Dependabot for npm and GitHub Actions; npm audit and dependency review in CI                      |
 | Large `BasePage` / utilities growth               | God objects                        | RULE-005 / RULE-014 and review checklist                                                                                      |
 | AI agents fabricating locators or results         | Invalid tests                      | Agent contracts require evidence; escalation on missing input                                                                 |
 | Security tests against unauthorized hosts         | Legal/operational risk             | `security.authorizedHosts` guard that fails before any security scenario runs                                                 |

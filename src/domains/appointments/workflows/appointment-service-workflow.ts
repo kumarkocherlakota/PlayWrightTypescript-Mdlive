@@ -1,6 +1,6 @@
 import { ValidationError } from '@core/errors';
 import type { ApiContext } from '@interaction/api';
-import type { RequestOutcome } from '@domains/shared-kernel';
+import { serviceClientOf, type RequestOutcome } from '@domains/shared-kernel';
 import type { Provider, Slot } from '@domains/providers';
 import { AppointmentClient } from '../api/appointment-client';
 import { BookingRequestBuilder } from '../builders/booking-request-builder';
@@ -67,7 +67,21 @@ export class AppointmentServiceWorkflow {
     return this.client().attemptCancel(id);
   }
 
+  /** Lists appointments as the configured service client instead of the member. */
+  public attemptToListAsServiceClient(): Promise<RequestOutcome<readonly Appointment[]>> {
+    return this.serviceClient().attemptList();
+  }
+
+  /** Books a time of a scenario-owned provider as the configured service client. */
+  public attemptToBookAsServiceClient(slotId: string): Promise<RequestOutcome<Appointment>> {
+    return this.serviceClient().attemptBook(this.newBookingRequest(slotId).build());
+  }
+
   private client(): AppointmentClient {
     return new AppointmentClient(this.api.session.client(), this.api.session.validator);
+  }
+
+  private serviceClient(): AppointmentClient {
+    return new AppointmentClient(serviceClientOf(this.api.session), this.api.session.validator);
   }
 }

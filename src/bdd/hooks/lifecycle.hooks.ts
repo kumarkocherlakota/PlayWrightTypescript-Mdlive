@@ -11,6 +11,7 @@ import {
 import { UiSession } from '@core/browser';
 import { getConfig } from '@core/config';
 import { serializeError } from '@core/errors';
+import { unauthorizedHosts } from '@core/security';
 import { ApiSession } from '@interaction/api';
 import { finalizeApiSession } from '@bdd/support/api-session-finalizer';
 import { reportScenarioFailure } from '@bdd/support/failure-reporter';
@@ -39,6 +40,29 @@ Before({ name: 'Initialize scenario runtime' }, function (this: CustomWorld, hoo
     uri: this.scenario.uri,
   });
 });
+
+// Security scenarios run only against hosts listed in security.authorizedHosts. Returning
+// 'skipped' also skips the session hooks below, so nothing is sent to an unauthorized host.
+Before(
+  { name: 'Check security-testing authorization', tags: '@security' },
+  function (this: CustomWorld) {
+    const { ui, api, auth, security } = this.config;
+    const outside = unauthorizedHosts(
+      [ui.baseUrl, api.baseUrl, auth.baseUrl],
+      security.authorizedHosts,
+    );
+    if (outside.length === 0) {
+      return undefined;
+    }
+    this.logger.warn('Security scenario skipped: hosts are not authorized for security testing', {
+      hosts: outside,
+    });
+    this.attach(
+      `Skipped: ${outside.join(', ')} not listed in security.authorizedHosts (SECURITY_AUTHORIZED_HOSTS).`,
+    );
+    return 'skipped';
+  },
+);
 
 // @integration scenarios drive the UI and verify or prepare through the API, so they get both.
 Before(

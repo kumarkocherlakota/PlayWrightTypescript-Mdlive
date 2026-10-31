@@ -126,6 +126,7 @@ export type BrowserName = UiConfig['browser'];
 export type LogLevel = FrameworkConfig['logging']['level'];
 export type ArtifactPolicy = ArtifactsConfig['video'];
 export type ScreenshotPolicy = ArtifactsConfig['screenshot'];
+export type AccessibilityConfig = FrameworkConfig['accessibility'];
 export type AppointmentPolicy = NonNullable<FrameworkConfig['healthcare']['appointmentPolicy']>;
 
 function isValidTimeZone(value: string): boolean {
