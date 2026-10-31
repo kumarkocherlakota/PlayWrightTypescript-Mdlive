@@ -19,6 +19,8 @@ export interface UiSessionDiagnostics {
   readonly url: string;
   readonly consoleErrors: readonly string[];
   readonly failedRequests: readonly string[];
+  /** Responses with status 400 or above, as "METHOD origin/path -> status". */
+  readonly httpErrors: readonly string[];
 }
 
 export interface UiSessionArtifacts {
@@ -38,6 +40,7 @@ const MAX_DIAGNOSTIC_ENTRIES = 50;
 export class UiSession {
   private readonly consoleErrors: string[] = [];
   private readonly failedRequests: string[] = [];
+  private readonly httpErrors: string[] = [];
 
   private constructor(
     public readonly context: BrowserContext,
@@ -67,6 +70,7 @@ export class UiSession {
       url: this.safeUrl(this.page.url()),
       consoleErrors: [...this.consoleErrors],
       failedRequests: [...this.failedRequests],
+      httpErrors: [...this.httpErrors],
     };
   }
 
@@ -127,6 +131,14 @@ export class UiSession {
         this.failedRequests,
         `${request.method()} ${this.safeUrl(request.url())} (${reason})`,
       );
+    });
+    this.page.on('response', (response) => {
+      if (response.status() >= 400) {
+        this.record(
+          this.httpErrors,
+          `${response.request().method()} ${this.safeUrl(response.url())} -> ${String(response.status())}`,
+        );
+      }
     });
   }
 

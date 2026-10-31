@@ -96,9 +96,9 @@ export default defineConfig(
   },
 
   // The reference app is a standalone synthetic server and reads its own process arguments.
-  // The local runner prepares the environment of a child process before any framework code runs.
+  // The test runner prepares the environment of a child process before any framework code runs.
   {
-    files: ['reference-app/**/*.ts', 'tools/local-run/**/*.ts'],
+    files: ['reference-app/**/*.ts', 'tools/run/run-cucumber.ts'],
     rules: { 'no-restricted-properties': 'off' },
   },
 
