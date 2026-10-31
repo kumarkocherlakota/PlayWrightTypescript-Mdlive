@@ -5,12 +5,17 @@
  * application.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { IdentityProvider, type IdentityOptions } from './identity';
+import { authRoutes } from './routes/auth-routes';
 import { galleryRoutes } from './routes/gallery-routes';
-import { sendJson, type Route } from './routing';
+import { inventoryRoutes } from './routes/inventory-routes';
+import { HttpProblem, matchPath, sendJson, type Route } from './routing';
 
 export interface ReferenceAppOptions {
   readonly host: string;
   readonly port: number;
+  /** Accounts the synthetic identity provider accepts; none means every token request fails. */
+  readonly identity?: IdentityOptions;
   readonly routes?: readonly Route[];
 }
 
@@ -27,7 +32,13 @@ const SECURITY_HEADERS: Readonly<Record<string, string>> = {
 };
 
 export async function startReferenceApp(options: ReferenceAppOptions): Promise<ReferenceAppHandle> {
-  const routes = options.routes ?? [...galleryRoutes, healthRoute];
+  const identity = new IdentityProvider(options.identity);
+  const routes = options.routes ?? [
+    ...galleryRoutes,
+    ...authRoutes(identity),
+    ...inventoryRoutes(identity),
+    healthRoute,
+  ];
   const server = createServer((request, response) => {
     void handle(routes, request, response);
   });
@@ -77,16 +88,21 @@ async function handle(
     response.setHeader(name, value);
   }
   const url = new URL(request.url ?? '/', 'http://reference-app.local');
-  const route = routes.find(
-    (candidate) => candidate.method === request.method && candidate.path === url.pathname,
-  );
-  if (route === undefined) {
+  const matched = routes
+    .filter((candidate) => candidate.method === request.method)
+    .map((route) => ({ route, params: matchPath(route.path, url.pathname) }))
+    .find((candidate) => candidate.params !== undefined);
+  if (matched?.params === undefined) {
     sendJson(response, 404, { error: 'not_found' });
     return;
   }
   try {
-    await route.handle(request, response, url);
+    await matched.route.handle(request, response, url, matched.params);
   } catch (error) {
+    if (error instanceof HttpProblem) {
+      sendJson(response, error.status, error.body);
+      return;
+    }
     // Respond like a real service (generic 500, no details) but surface the cause to developers.
     console.error(`[reference-app] ${request.method ?? ''} ${url.pathname} failed:`, error);
     if (!response.headersSent) {

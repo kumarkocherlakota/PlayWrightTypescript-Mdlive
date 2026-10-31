@@ -27,7 +27,7 @@ export function readEnvironmentOverrides(source: EnvironmentSource): PlainObject
       timezoneId: text('TIMEZONE'),
     },
     api: { baseUrl: text('API_BASE_URL') },
-    auth: { baseUrl: text('AUTH_BASE_URL') },
+    auth: { baseUrl: text('AUTH_BASE_URL'), apiMethod: text('API_AUTH_METHOD') },
     execution: {
       ci: bool('CI'),
       workerId: text('CUCUMBER_WORKER_ID'),

@@ -5,6 +5,8 @@ import type { FrameworkConfig } from '@core/config';
 import { FrameworkError } from '@core/errors';
 import type { ExecutionLogger, MemoryLogSink } from '@core/logging';
 import type { Redactor, SecretProvider } from '@core/security';
+import type { CleanupRegistry } from '@core/test-data';
+import type { ApiContext, ApiSession } from '@interaction/api';
 import type { UiContext } from '@interaction/ui';
 import { ScenarioContext } from './scenario-context';
 import type { ScenarioInfo, ScenarioRuntime } from './scenario-runtime';
@@ -21,6 +23,7 @@ export class CustomWorld extends World<WorldParameters> {
   public readonly state = new ScenarioContext<ScenarioState>();
   private runtime: ScenarioRuntime | undefined;
   private uiSession: UiSession | undefined;
+  private apiSession: ApiSession | undefined;
 
   public constructor(options: IWorldOptions<WorldParameters>) {
     super(options);
@@ -81,6 +84,44 @@ export class CustomWorld extends World<WorldParameters> {
 
   public get hasUiSession(): boolean {
     return this.uiSession !== undefined;
+  }
+
+  /** Undo actions for test data created by this scenario; run by the After hook. */
+  public get cleanup(): CleanupRegistry {
+    return this.requireRuntime().cleanup;
+  }
+
+  public get api(): ApiSession {
+    if (this.apiSession === undefined) {
+      throw new FrameworkError(
+        'This scenario has no API session. Tag the scenario with @api or @integration.',
+        { context: { scenario: this.runtime?.scenario.name } },
+      );
+    }
+    return this.apiSession;
+  }
+
+  /** API session, test-data services and logger for domain API clients and workflows. */
+  public get apiContext(): ApiContext {
+    return {
+      session: this.api,
+      logger: this.logger.child({ component: 'api' }),
+      ids: this.requireRuntime().ids,
+      cleanup: this.cleanup,
+    };
+  }
+
+  public attachApiSession(session: ApiSession): void {
+    if (this.apiSession !== undefined) {
+      throw new FrameworkError('An API session is already attached to this scenario.');
+    }
+    this.apiSession = session;
+  }
+
+  public detachApiSession(): ApiSession | undefined {
+    const session = this.apiSession;
+    this.apiSession = undefined;
+    return session;
   }
 
   public attachUiSession(session: UiSession): void {
