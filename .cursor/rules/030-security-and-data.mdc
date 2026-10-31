@@ -1,0 +1,14 @@
+---
+description: Secrets, healthcare data protection, error handling and logging safety
+alwaysApply: true
+---
+
+# Security and data protection
+
+- **RULE-007 — No secrets in source control.** Credentials, tokens, cookies, private keys and API keys come only from environment variables or CI secrets via `SecretProvider`. `.env` is git-ignored; `.env.example` lists names only. Only `src/core/config/environment-source.ts` reads `process.env` (ESLint).
+- Keep secrets wrapped in `Secret`; call `reveal()` only at the exact point of use (filling a password field, building an auth header). Never log a revealed value.
+- **RULE-008 — No real healthcare data.** Use synthetic data from builders only. Never copy production records, screenshots of real patients, or real member IDs into fixtures, features, tests or docs. Synthetic records carry the configured marker (`healthcare.syntheticDataMarker`).
+- Never log or attach passwords, tokens, authorization headers, session cookies, private keys, payment-card data, PHI or unmasked PII. Every log and attachment must pass through `Redactor` (the `ExecutionLogger` does this automatically).
+- **RULE-015 — Failures must never be silently swallowed.** Catch only to add context (wrap in a specific `FrameworkError` subclass with `cause`), perform required cleanup, or convert and rethrow. An empty `catch` or a catch that only returns a default value is a defect. If cleanup continues after an error, log it at `error` level and attach it to the report.
+- Security tests run only against hosts in `security.authorizedHosts`.
+- Passing tests do not establish HIPAA, GDPR or other regulatory compliance. Never claim compliance in code, docs or reports.

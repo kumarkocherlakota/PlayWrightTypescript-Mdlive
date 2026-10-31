@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Catalog search · Component gallery (synthetic)</title>
+    <link rel="stylesheet" href="/gallery/assets/gallery.css" />
+    <script src="/gallery/assets/gallery.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <p class="banner">
+        Synthetic reference application for framework self-tests. It contains no real data.
+      </p>
+      <nav aria-label="Main">
+        <ul>
+          <li><a href="/gallery" aria-current="page">Catalog</a></li>
+          <li><a href="/gallery/about">About</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Catalog search</h1>
+
+      <form aria-label="Catalog search" novalidate>
+        <div class="field">
+          <label for="keyword">Keyword</label>
+          <input
+            id="keyword"
+            name="keyword"
+            type="text"
+            autocomplete="off"
+            aria-describedby="keyword-hint"
+          />
+          <p id="keyword-hint" class="hint">Between 2 and 40 characters.</p>
+          <p id="keyword-error" class="error" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="category">Category</label>
+          <select id="category" name="category">
+            <option value="">All categories</option>
+            <option>Hardware</option>
+            <option>Software</option>
+            <option>Services</option>
+          </select>
+        </div>
+
+        <button type="submit">Search</button>
+      </form>
+
+      <div id="search-status" role="status" aria-live="polite"></div>
+
+      <table aria-label="Search results" hidden>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Category</th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <dialog aria-labelledby="details-title">
+        <h2 id="details-title"></h2>
+        <dl>
+          <dt>Category</dt>
+          <dd id="details-category"></dd>
+          <dt>Status</dt>
+          <dd id="details-status"></dd>
+        </dl>
+        <button type="button" id="details-close">Close</button>
+      </dialog>
+    </main>
+  </body>
+</html>

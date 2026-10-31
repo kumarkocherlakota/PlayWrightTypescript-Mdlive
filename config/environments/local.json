@@ -1,0 +1,21 @@
+{
+  "ui": {
+    "baseUrl": "http://localhost:4000",
+    "headless": true
+  },
+  "api": {
+    "baseUrl": "http://localhost:4000/api"
+  },
+  "auth": {
+    "baseUrl": "http://localhost:4000/auth"
+  },
+  "logging": {
+    "level": "debug"
+  },
+  "security": {
+    "authorizedHosts": ["localhost", "127.0.0.1"]
+  },
+  "referenceApp": {
+    "autoStart": true
+  }
+}

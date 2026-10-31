@@ -1,0 +1,18 @@
+---
+description: Page Object, Component Object, locator and synchronization standards
+globs: src/domains/**/pages/**/*.ts,src/domains/**/components/**/*.ts,src/interaction/ui/**/*.ts,src/domains/**/workflows/**/*.ts
+alwaysApply: false
+---
+
+# UI interaction layer
+
+- **RULE-003 — Page Objects must not contain complete workflows.** A page exposes capabilities of one page (`searchFor(criteria)`, `selectProvider(name)`). Sequences across pages belong in a workflow.
+- **RULE-005 — BasePage must remain small.** `BasePage` provides only navigation to its own path and a readiness contract (`waitUntilReady`). Target under 80 lines. Shared behavior goes into components or focused modules, not into `BasePage`.
+- **RULE-006 — No fixed wait without documented justification.** `waitForTimeout` is an ESLint error. Use web-first assertions (`expect(locator).toBeVisible()`), `waitForURL`, `waitForResponse`, or `@core/polling`. A justified exception requires an inline `eslint-disable-next-line` with a reason and a linked issue.
+- **RULE-013 — Locators must follow the locator hierarchy** (ADR-005):
+  1. `getByRole` with accessible name → 2. `getByLabel` → 3. `getByPlaceholder` → 4. `getByText` (stable, unique) → 5. `getByTestId` → 6. short stable CSS → 7. XPath (last resort, justified in a comment).
+  - No dynamic IDs, generated class names, long CSS chains, or `nth()/first()/last()` without a justification comment.
+  - Locators live only in Page/Component Objects, declared as `readonly` fields or small getter methods.
+  - Never invent a locator. If DOM/accessibility evidence is missing, ask for it or recommend a `data-testid`.
+- Components receive a root `Locator` and scope all child locators to it so they work inside lists, dialogs and tables.
+- Do not wrap Playwright APIs unless the wrapper adds business meaning, structured logging, stability or standardized error context.

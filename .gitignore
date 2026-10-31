@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Generated reports and artifacts (may contain sensitive data; never commit)
+reports/
+allure-results/
+allure-report/
+test-results/
+playwright-report/
+*.log
+
+# Authentication storage state (contains session cookies/tokens)
+.auth/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Tooling
+.eslintcache
+.DS_Store
+coverage/

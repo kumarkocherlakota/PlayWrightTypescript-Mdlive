@@ -1,0 +1,57 @@
+{
+  "typeTags": ["@ui", "@api", "@integration"],
+  "intentTags": ["@positive", "@negative", "@boundary", "@security", "@accessibility"],
+  "typeTagExemptions": ["@framework"],
+  "allowedTags": [
+    "@smoke",
+    "@regression",
+    "@healthcare",
+    "@critical",
+    "@wip",
+    "@serial",
+    "@framework",
+    "@manual",
+    "@blocked"
+  ],
+  "allowedTagPatterns": [
+    "^@REQ-[A-Z]+-\\d{3}$",
+    "^@AC-[A-Z]+-\\d{3}(\\.\\d+)?$",
+    "^@DEF-[A-Za-z0-9-]+$"
+  ],
+  "forbiddenStepPatterns": [
+    {
+      "pattern": "(^|[\\s\"'])#[A-Za-z][\\w-]*",
+      "message": "CSS id selector in a step (RULE-002)"
+    },
+    {
+      "pattern": "(^|[\\s\"'])\\.[a-z][\\w-]*([\\s\"']|$)",
+      "message": "CSS class selector in a step (RULE-002)"
+    },
+    {
+      "pattern": "//[A-Za-z*]|\\bxpath\\b",
+      "message": "XPath in a step (RULE-002)"
+    },
+    {
+      "pattern": "css=|data-test(id)?|\\bgetBy[A-Z]|\\blocator\\b|\\bselector\\b",
+      "message": "Locator mechanics in a step (RULE-002)"
+    },
+    {
+      "pattern": "<(button|div|span|input|select|table|tr|td|li|ul|form)[\\s>/]",
+      "message": "HTML element in a step (RULE-002)"
+    },
+    {
+      "pattern": "\\bwaits? (for )?\\d+ ?(ms|milliseconds?|seconds?|secs?)\\b",
+      "message": "Fixed wait in a step (RULE-006)"
+    }
+  ],
+  "discouragedStepPatterns": [
+    {
+      "pattern": "\\bI (click|tap|type|press|hover|scroll|double-click)\\b",
+      "message": "UI mechanics wording; describe the business action instead"
+    },
+    {
+      "pattern": "\\b(clicks?|taps?) (on )?(the )?(button|link|icon|checkbox)\\b",
+      "message": "UI mechanics wording; describe the business action instead"
+    }
+  ]
+}

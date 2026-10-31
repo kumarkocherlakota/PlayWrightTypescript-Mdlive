@@ -1,0 +1,268 @@
+# Universal Playwright Automation Framework — Architecture Proposal
+
+Status: **Phases 1–2 implemented** · Reference domain: Healthcare · Reference workflow: Provider search and appointment booking
+
+This document is the architecture baseline. Every phase is reviewed against it. Decisions that
+change it must be recorded as an ADR under [`adr/`](./adr/).
+
+---
+
+## 1. Assumptions
+
+| ID   | Assumption                                                                                                                                                                                                     | Where it is configurable                           |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| A-01 | No live application or API is available while the framework is built. A local, clearly marked reference application (synthetic data only) will be provided in Phase 5 so the healthcare scenarios can execute. | `TEST_ENV=local`, `config/environments/local.json` |
+| A-02 | The default execution environment is `qa`. Its URLs are **not** committed; they are supplied through `UI_BASE_URL`, `API_BASE_URL` and `AUTH_BASE_URL`.                                                        | `.env` (local only) or CI variables                |
+| A-03 | Authentication is form-based login for the UI and an OAuth 2.0 token endpoint for the API. Both are strategies, so other methods can be added without changing callers.                                        | `auth.uiMethod`, `auth.apiMethod`                  |
+| A-04 | A single synthetic test user (`TEST_USER_EMAIL` / `TEST_USER_PASSWORD`) exists per environment. Data-mutating scenarios create their own records rather than reusing shared records.                           | Secrets via environment                            |
+| A-05 | The application exposes accessible roles and labels, or will add `data-testid` attributes where it does not.                                                                                                   | Locator strategy (ADR-005)                         |
+| A-06 | API payloads are JSON. FHIR R4 support is optional and disabled by default.                                                                                                                                    | `healthcare.fhir.enabled`                          |
+| A-07 | Accessibility target is WCAG 2.2 AA.                                                                                                                                                                           | `accessibility.standard`                           |
+| A-08 | Security tests are allowed only against hosts explicitly listed as authorized.                                                                                                                                 | `security.authorizedHosts`                         |
+| A-09 | Times are compared in an explicit time zone (default `UTC`).                                                                                                                                                   | `ui.timezoneId`                                    |
+| A-10 | Node.js 22 LTS or newer. TypeScript is pinned to 6.0.x because `typescript-eslint` does not yet support TypeScript 7.                                                                                          | `.nvmrc`, `package.json`                           |
+
+## 2. Missing information (clarification list)
+
+These are **open questions**. The framework makes each one configurable instead of inventing a
+business rule. The living list is in [`CLARIFICATIONS.md`](./CLARIFICATIONS.md).
+
+1. Real QA/Staging URLs and which environments are authorized for security testing.
+2. Exact authentication flow (SSO/SAML, OAuth grant type, MFA, session timeout duration).
+3. Cancellation policy: cut-off window before an appointment, who may cancel, whether a fee applies.
+4. Booking rules: maximum appointments per member per day, duplicate-booking definition, booking horizon (how far ahead slots can be booked), minimum notice.
+5. Dependent-member rules (age of majority, who may book for a dependent).
+6. Required booking details (reason for visit length limits, insurance capture, consent capture).
+7. API contracts (OpenAPI or FHIR profile), error-response format, pagination style.
+8. Response-time thresholds (SLOs) per endpoint.
+9. Data retention requirements for cancelled appointments and audit logs.
+10. Role catalogue (member, dependent, proxy, provider, admin) and the permission matrix.
+11. Supported browsers/devices matrix and minimum viewport.
+12. Whether test data can be cleaned up through an API, or only through soft-delete/cancellation.
+
+## 3. Architecture proposal
+
+### 3.1 Style
+
+A **layered, domain-modular** architecture with **dependency inversion** at the boundaries:
+
+- **Clean/Layered:** each layer depends only on layers below it (Section 4).
+- **Domain-driven modules:** business capabilities (`authentication`, `providers`, `appointments`, …) are vertical slices containing their own models, pages, components, API clients, builders, schemas and workflows.
+- **Controlled public contracts:** each domain exposes one `index.ts`. Other domains and step definitions import only from it. Enforced by `dependency-cruiser`.
+- **Composition over inheritance:** pages _compose_ components; workflows _compose_ pages and API clients. `BasePage` is intentionally tiny (navigation + readiness contract).
+- **Ports and adapters at the edges:** `SecretProvider`, `LogSink`, `AuthStrategy`, `SchemaValidator` are interfaces. Infrastructure provides the adapters.
+
+### 3.2 Layers and responsibilities
+
+| #   | Layer             | Location                                                                     | Responsibility                                                                                           | May depend on                          |
+| --- | ----------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| 1   | Specification     | `features/`                                                                  | Gherkin, business language, tags, examples                                                               | —                                      |
+| 2   | Step / Adapter    | `src/bdd/steps/`                                                             | Translate Gherkin into workflow calls. Thin.                                                             | Workflows (domain public API), World   |
+| —   | BDD runtime       | `src/bdd/world`, `src/bdd/hooks`                                             | Custom World, typed scenario context, lifecycle hooks                                                    | Core, interaction                      |
+| 3   | Business workflow | `src/domains/*/workflows/`                                                   | Multi-page/multi-service business processes                                                              | Pages, components, API clients, models |
+| 4   | UI interaction    | `src/domains/*/pages`, `src/domains/*/components`, `src/interaction/ui/`     | Page/Component Objects, locator conventions                                                              | Models, core                           |
+| 5   | API interaction   | `src/domains/*/api`, `src/interaction/api/`                                  | Typed domain clients, base HTTP client, auth strategies, schema validation                               | Models, core                           |
+| 6   | Domain            | `src/domains/*/models`, `src/domains/*/builders`, `src/domains/*/validators` | Business models, terminology, builders, business validators                                              | Core (types/errors only)               |
+| 7   | Framework core    | `src/core/`                                                                  | Config, logging, redaction, secrets, errors, browser lifecycle, artifacts, polling, test-data primitives | Infrastructure only                    |
+| 8   | Infrastructure    | npm packages, file system, env, CI                                           | Playwright, Cucumber, Allure, axe-core, GitHub Actions, Docker                                           | —                                      |
+
+### 3.3 Key cross-cutting designs
+
+- **Configuration:** one Zod schema; precedence _defaults → `config/environments/<env>.json` → environment variables → runtime overrides_; validated at startup, frozen, and fail-fast with a `ConfigurationError`. Only `src/core/config/environment-source.ts` reads `process.env` (ESLint-enforced).
+- **Secrets:** credentials never enter the config object. They are read through a `SecretProvider` and wrapped in a `Secret` value object whose `toString()`/`toJSON()`/`inspect` return `***`. Only `reveal()` exposes the value, at the point of use.
+- **Redaction:** every log entry and every report attachment passes through a `Redactor` that masks sensitive keys (password, token, authorization, cookie, SSN, DOB, MRN, …) and sensitive patterns (JWTs, bearer tokens, e-mail addresses, card numbers, SSNs).
+- **Lifecycle:** one browser **per worker process**, one `BrowserContext` **per scenario** (ADR-004). Browsers launch lazily only for `@ui` scenarios, so API-only runs never start a browser.
+- **Errors:** `FrameworkError` hierarchy with an error `code`, structured `context` and native `cause`. Errors are never swallowed; they are wrapped with context and rethrown.
+- **Observability:** a scenario-scoped `ExecutionLogger` (structured JSON entries with correlation ID, scenario, browser, environment, retry attempt) plus an `ArtifactManager` that owns all output paths. `FailureAnalyzer` (Phase 4) classifies failures from these artifacts.
+- **Parallel safety:** no mutable module state except the per-process browser handle and the frozen config. Scenario state lives in the World. Test data is unique per scenario (run ID + worker ID + sequence).
+
+## 4. Dependency-direction diagram
+
+```mermaid
+flowchart TD
+    REQ[Requirements / Traceability] --> FEAT[Cucumber feature files<br/>features/]
+    FEAT --> STEPS[Step definitions<br/>src/bdd/steps]
+    STEPS --> WF[Business workflows<br/>src/domains/*/workflows]
+    WF --> UI[Pages and Components<br/>src/domains/*/pages · components<br/>src/interaction/ui]
+    WF --> API[Domain API clients<br/>src/domains/*/api<br/>src/interaction/api]
+    UI --> MODEL[Domain models<br/>src/domains/*/models]
+    API --> MODEL
+    MODEL --> CORE[Framework core<br/>src/core]
+    UI --> CORE
+    API --> CORE
+    WORLD[World and hooks<br/>src/bdd/world · hooks] --> CORE
+    STEPS --> WORLD
+    CORE --> INFRA[Infrastructure<br/>Playwright · Cucumber · FS · env · CI]
+```
+
+Forbidden directions (enforced in `.dependency-cruiser.cjs`):
+
+- `src/core` → anything in `src/interaction`, `src/domains`, `src/bdd`
+- `src/interaction` → `src/domains`, `src/bdd`
+- `src/domains` → `src/bdd`
+- `src/domains/A/**` → `src/domains/B/<internal>` (only `src/domains/B/index.ts` is allowed)
+- `src/bdd/steps` → `playwright` / `@playwright/test` (except `expect`, ESLint-enforced)
+- `reference-app/` → `src/` (the synthetic app is standalone), and `src/` → `reference-app/` except from `src/bdd/hooks`
+- `src/` → `tools/`
+- Any circular dependency
+
+## 5. Folder structure (target state)
+
+```text
+.
+├── .cursor/
+│   ├── rules/                     # Architecture governance (RULE-001 … RULE-018)
+│   └── agents/                    # Specialized Cursor agents (Phase 6)
+├── .github/workflows/             # CI pipelines (Phase 6)
+├── config/
+│   └── environments/              # local.json, dev.json, qa.json, staging.json (no secrets)
+├── docker/                        # Dockerfile / compose (Phase 6)
+├── docs/
+│   ├── architecture/
+│   │   ├── ARCHITECTURE.md
+│   │   ├── CLARIFICATIONS.md
+│   │   └── adr/                   # ADR-001 … ADR-010
+│   ├── onboarding/                # New-project onboarding guide (Phase 7)
+│   └── traceability/              # RTM and coverage summaries (Phase 5)
+├── features/
+│   ├── framework/                 # Framework self-checks
+│   └── healthcare/
+│       └── appointments/          # Reference use case (Phase 5)
+├── reference-app/                 # Local synthetic healthcare app + API (Phase 5, clearly marked)
+├── src/
+│   ├── core/
+│   │   ├── artifacts/             # ArtifactManager
+│   │   ├── browser/               # BrowserManager, UiSession
+│   │   ├── config/                # schema, loader, environment source
+│   │   ├── errors/                # FrameworkError hierarchy
+│   │   ├── logging/               # ExecutionLogger, sinks
+│   │   ├── polling/               # poll-until utilities (Phase 2/3)
+│   │   ├── security/              # Redactor, Secret, SecretProvider
+│   │   └── test-data/             # unique-id, seeded random (Phase 3/5)
+│   ├── interaction/
+│   │   ├── ui/                    # BasePage, BaseComponent, generic components (Phase 2)
+│   │   └── api/                   # BaseHttpClient, auth strategies, schema validator (Phase 3)
+│   ├── domains/
+│   │   ├── authentication/        # models, pages, api, workflows, index.ts
+│   │   ├── members/
+│   │   ├── providers/
+│   │   ├── appointments/          # + schemas, validators, builders
+│   │   ├── payments/ prescriptions/ telehealth/   # scaffolded when needed
+│   │   └── shared-kernel/         # cross-domain healthcare value types (Member ID, Period, …)
+│   └── bdd/
+│       ├── world/                 # CustomWorld, ScenarioContext
+│       ├── hooks/                 # lifecycle and artifact hooks
+│       ├── steps/                 # per-domain step definitions
+│       └── support/               # parameter types
+├── tests/
+│   └── unit/                      # Unit tests for reusable framework code (RULE-012)
+├── tools/                         # gherkin lint, traceability, failure analyzer CLIs
+└── reports/                       # generated, git-ignored
+```
+
+## 6. Technology and dependency list
+
+All are **dev dependencies**: the framework is a test project, not a published runtime library.
+
+| Package                                                | Purpose                                                                  | Phase |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ | ----- |
+| `@playwright/test`                                     | Browser automation, `APIRequestContext`, web-first `expect`              | 1     |
+| `@cucumber/cucumber`                                   | BDD runner, built-in HTML / JSON / JUnit formatters                      | 1     |
+| `typescript` (6.0.x)                                   | Strict type checking                                                     | 1     |
+| `tsx`                                                  | Fast TypeScript execution for Cucumber and unit tests (supports `paths`) | 1     |
+| `zod`                                                  | Runtime validation of configuration and external input                   | 1     |
+| `dotenv`                                               | Load a local, git-ignored `.env` file                                    | 1     |
+| `cross-env`                                            | Cross-platform environment variables in npm scripts                      | 1     |
+| `eslint`, `@eslint/js`, `typescript-eslint`, `globals` | Linting, type-aware rules                                                | 1     |
+| `prettier`, `eslint-config-prettier`                   | Formatting                                                               | 1     |
+| `dependency-cruiser`                                   | Layer boundaries, domain public contracts, circular dependency detection | 1     |
+| `@types/node`                                          | Node.js typings                                                          | 1     |
+| `ajv`, `ajv-formats`                                   | JSON Schema contract validation (incl. FHIR schemas)                     | 3     |
+| `@faker-js/faker`                                      | Seeded synthetic test data                                               | 3/5   |
+| `allure-cucumberjs`, `allure`                          | Allure results and report generation (Java-free CLI)                     | 4     |
+| `@axe-core/playwright`                                 | Automated accessibility checks                                           | 6     |
+| `@cucumber/gherkin`, `@cucumber/messages`              | Custom Gherkin linter (`tools/gherkin-lint`), same parser as Cucumber    | 2     |
+
+Native Node.js `node:test` is used for unit tests to avoid another test framework.
+
+## 7. Agent design (implemented in Phase 6)
+
+Agents live in `.cursor/agents/<name>.md`. Every agent definition contains: responsibility,
+input contract, output structure, restrictions, escalation rules, files it may modify, files it
+must not modify, and a validation checklist. **No agent may fabricate requirements, locators, API
+responses, execution results, test results or domain rules.** When evidence is missing the agent
+must stop and return a clarification request.
+
+| #   | Agent                | Single responsibility                                                    | May modify                                                                       |
+| --- | -------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 1   | Framework Architect  | Evolve the architecture and write ADRs                                   | `docs/architecture/**`                                                           |
+| 2   | Architecture Review  | Detect layer/boundary/SOLID violations (read-only report)                | none                                                                             |
+| 3   | Requirement Analysis | Turn requirements into acceptance criteria, assumptions, gaps            | `docs/traceability/requirements/**`                                              |
+| 4   | Scenario Generation  | Write Gherkin from approved acceptance criteria                          | `features/**`                                                                    |
+| 5   | Automation Selection | Decide UI / API / integration / manual per scenario, with reasons        | `docs/traceability/**`                                                           |
+| 6   | Locator              | Extract and validate locators from DOM / a11y tree / screenshot evidence | locator sections of `src/domains/*/pages                                         | components/**` |
+| 7   | Page Object          | Create pages and components using validated locators                     | `src/domains/*/pages/**`, `src/domains/*/components/**`, `src/interaction/ui/**` |
+| 8   | API Test             | Typed clients, models, schemas, builders, API features                   | `src/domains/*/api                                                               | models         | schemas | builders/**`, `features/**/api/**` |
+| 9   | Test Data            | Synthetic data factories, setup/cleanup services                         | `src/domains/*/builders/**`, `src/core/test-data/**`                             |
+| 10  | Healthcare Domain    | Validate domain terminology, privacy, FHIR mapping                       | `src/domains/*/models/**`, `docs/healthcare/**`                                  |
+| 11  | Security Review      | Secrets, PHI/PII exposure, authz coverage (report + fixes in tests)      | `features/**/security/**`, `src/core/security/**`                                |
+| 12  | Accessibility        | axe integration and keyboard/focus scenarios                             | `features/**/accessibility/**`, `src/interaction/ui/accessibility/**`            |
+| 13  | Flakiness Analysis   | Analyze retries/history; never "fix" by adding waits                     | `docs/quality/flakiness/**`                                                      |
+| 14  | Failure Analysis     | Classify failures from real artifacts                                    | `reports/analysis/**`                                                            |
+| 15  | Code Review          | Review diffs against `.cursor/rules`                                     | none                                                                             |
+| 16  | Documentation        | README, onboarding, guides                                               | `README.md`, `docs/**` (not ADRs)                                                |
+
+## 8. Implementation phases
+
+| Phase | Scope                                                                                                                                                                                                                                     | Exit criteria                                                                           |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 1     | Architecture docs, ADRs, governance rules, Node/TS, Playwright, Cucumber, ESLint/Prettier, dependency boundaries, typed config, secrets, redaction, logging, errors, artifacts, World and hooks, framework self-check feature, unit tests | install, format, lint, type check, boundary check, unit tests, Cucumber run all succeed |
+| 2     | `BasePage`, `BaseComponent`, generic components, locator lint rules, synchronization strategy (ADR-011), polling, Gherkin lint, unused-step gate, local reference app with component gallery                                              | Phase 1 gates + UI self-tests on Chromium, Firefox and WebKit                           |
+| 3     | `BaseHttpClient`, auth strategies (OAuth2), domain API clients, models, builders, Ajv schemas, API assertions, setup/cleanup registry                                                                                                     | API self-tests against reference API                                                    |
+| 4     | Allure, failure artifacts (trace/video/console/network), `FailureAnalyzer`, report generation on failure                                                                                                                                  | Reports produced for passing and failing runs                                           |
+| 5     | Reference app + healthcare appointment use case (UI, API, UI+API), RTM, coverage summary                                                                                                                                                  | Scenarios executed against the local reference app only                                 |
+| 6     | Cursor agents, axe-core, security tests, browser matrix, sharding, GitHub Actions, Docker, flakiness analysis                                                                                                                             | CI workflow lint (actionlint) + local dry runs                                          |
+| 7     | README, onboarding guide, architecture/dependency/security reviews, final verification                                                                                                                                                    | Definition of Done checklist                                                            |
+
+## 9. Risks and mitigations
+
+| Risk                                              | Impact                             | Mitigation                                                                                                                    |
+| ------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| No live system under test                         | Tests may encode wrong assumptions | Local reference app clearly marked synthetic; assumptions tracked in `CLARIFICATIONS.md`; no claims about real-system results |
+| PHI/PII or secrets leaking into logs/reports      | Compliance and security incident   | `Secret` value object, central `Redactor` on every sink and attachment, secret scanning in CI, short artifact retention       |
+| Architecture erosion over time                    | Unmaintainable framework           | `dependency-cruiser` boundaries, ESLint restrictions, Cursor rules, Architecture Review agent                                 |
+| Flaky tests hidden by retries                     | False confidence                   | Retries only in CI, retried-then-passed scenarios reported as flaky, no `waitForTimeout` (lint error)                         |
+| Shared accounts mutated in parallel               | Non-deterministic failures         | Unique data per scenario, API-based setup/cleanup, per-scenario context                                                       |
+| Tooling version drift (TS 7 vs typescript-eslint) | Broken lint                        | TypeScript pinned to 6.0.x; Dependabot/renovate in Phase 6                                                                    |
+| Large `BasePage` / utilities growth               | God objects                        | RULE-005 / RULE-014 and review checklist                                                                                      |
+| AI agents fabricating locators or results         | Invalid tests                      | Agent contracts require evidence; escalation on missing input                                                                 |
+| Security tests against unauthorized hosts         | Legal/operational risk             | `security.authorizedHosts` guard that fails before any security scenario runs                                                 |
+
+## 10. Phase 1 file plan
+
+| Path                                              | Purpose                                                                                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`, `.nvmrc`, `.npmrc`                | Project manifest, scripts, Node version, strict engines                                                                                     |
+| `tsconfig.json`                                   | Strict TypeScript with path aliases                                                                                                         |
+| `.gitignore`, `.editorconfig`, `.gitattributes`   | Repository hygiene                                                                                                                          |
+| `.prettierrc.json`, `.prettierignore`             | Formatting                                                                                                                                  |
+| `eslint.config.mjs`                               | Type-aware linting + architecture restrictions (no `process.env` outside config, no `waitForTimeout`, no raw Playwright in steps, no `any`) |
+| `.dependency-cruiser.cjs`                         | Layer direction, domain public contracts, no cycles                                                                                         |
+| `cucumber.mjs`                                    | Cucumber profiles, formatters (progress, HTML, JSON, JUnit), CI-only retries, parallel workers                                              |
+| `.env.example`                                    | Documented variables without values                                                                                                         |
+| `config/environments/{local,dev,qa,staging}.json` | Non-secret, environment-specific settings                                                                                                   |
+| `src/core/errors/*`                               | `FrameworkError` hierarchy                                                                                                                  |
+| `src/core/config/*`                               | Schema, environment source, loader, public API                                                                                              |
+| `src/core/security/*`                             | `Redactor`, `Secret`, `SecretProvider`                                                                                                      |
+| `src/core/logging/*`                              | `ExecutionLogger`, sinks                                                                                                                    |
+| `src/core/artifacts/*`                            | `ArtifactManager`                                                                                                                           |
+| `src/core/browser/*`                              | `BrowserManager` (per worker), `UiSession` (per scenario)                                                                                   |
+| `src/bdd/world/*`                                 | `CustomWorld`, typed `ScenarioContext`                                                                                                      |
+| `src/bdd/hooks/*`                                 | `BeforeAll`, `Before`, `After`, `AfterAll` lifecycle                                                                                        |
+| `src/bdd/steps/framework/*`                       | Thin framework self-check steps                                                                                                             |
+| `features/framework/framework-readiness.feature`  | Framework self-check scenarios                                                                                                              |
+| `tests/unit/**`                                   | Unit tests for config, redaction, secrets, errors, scenario context                                                                         |
+| `.cursor/rules/*.mdc`                             | RULE-001 … RULE-018                                                                                                                         |
+| `docs/architecture/adr/ADR-001 … ADR-010`         | Architecture decisions                                                                                                                      |
+| `docs/architecture/CLARIFICATIONS.md`             | Open questions                                                                                                                              |
+| `README.md`                                       | Phase 1 setup and commands (expanded in Phase 7)                                                                                            |

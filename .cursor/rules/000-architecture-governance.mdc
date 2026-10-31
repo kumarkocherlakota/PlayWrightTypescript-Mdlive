@@ -1,0 +1,23 @@
+---
+description: Layering, dependency direction, domain boundaries and module hygiene for the automation framework
+alwaysApply: true
+---
+
+# Architecture governance
+
+Source of truth: `docs/architecture/ARCHITECTURE.md` and `docs/architecture/adr/`. Changes to these
+rules require an ADR.
+
+Dependency direction (downward only):
+features → `src/bdd/steps` → `src/domains/*/workflows` → pages/components and domain API clients →
+domain models → `src/core` → infrastructure.
+
+- **RULE-016 — No circular dependencies.** Enforced by `npm run arch:check` (`no-circular`).
+- **RULE-017 — Business workflows belong in the workflow layer.** Multi-page or UI+API processes live in `src/domains/<domain>/workflows/`. Never in steps, pages, components or API clients.
+- **RULE-018 — Domains expose controlled public contracts.** Each domain exports from `src/domains/<domain>/index.ts`. Other domains and `src/bdd/**` import only that file. Enforced by `domain-public-contract` and `bdd-uses-domain-public-contract`.
+- **RULE-014 — Utility files must not become dumping grounds.** No `utils.ts`, `helpers.ts`, `common.ts`, `misc.ts` (enforced by `no-dumping-ground-modules`). Name modules after the capability (`redactor.ts`, `deep-merge.ts`).
+- **RULE-012 — Reusable code requires tests and documentation.** Anything in `src/core` or `src/interaction` needs unit tests in `tests/unit/**` and a TSDoc summary on the exported symbol.
+- `src/core` must not import `src/interaction`, `src/domains` or `src/bdd`. Only `src/bdd` may import `@cucumber/*`.
+- Composition over inheritance. Inherit only where a framework requires it (Cucumber `World`) or for the tiny `BasePage`/`BaseComponent` contracts.
+
+Before finishing any change run: `npm run validate`.

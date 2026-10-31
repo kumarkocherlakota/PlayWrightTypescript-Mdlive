@@ -1,0 +1,17 @@
+---
+description: Gherkin and step-definition standards (thin steps, business language, independent scenarios)
+globs: features/**/*.feature,src/bdd/**/*.ts
+alwaysApply: false
+---
+
+# BDD layer
+
+- **RULE-001 — Step definitions must remain thin.** A step parses Gherkin arguments, calls one workflow (or a World service), and asserts. Max 20 lines per step function (ESLint `max-lines-per-function`). No loops over UI elements, no retries, no branching business logic.
+- **RULE-002 — Feature files must not contain selectors.** No CSS, XPath, test IDs, URLs paths, or element types in Gherkin. Write business behavior: "When the member submits the appointment request", never "When I click #submit".
+- **RULE-004 — API calls must not be duplicated in step definitions.** Steps never import `playwright`, `@playwright/test` (except `expect`), `@core/browser` or `@interaction/*` (ESLint + dependency-cruiser). HTTP goes through domain API clients.
+- **RULE-009 — Scenarios must execute independently.** No scenario may rely on data or state produced by another scenario. Use `Background` or API setup instead.
+- Scenario state lives only in `this.state` (typed `ScenarioContext`). Add keys by augmenting `ScenarioState` in the step module, namespaced `<domain>.<name>`.
+- Use `function (this: CustomWorld)`; arrow functions lose the World.
+- Every business scenario carries a type tag (`@ui`, `@api` or `@integration`) and at least one intent tag (`@positive`, `@negative`, `@boundary`, `@security`, `@accessibility`). Framework self-checks are tagged `@framework` and need a type tag only when they use the browser or HTTP. Use `@wip` only locally; it is excluded by default.
+- Gherkin keywords: Feature, Background, Scenario, Scenario Outline + Examples, DataTable. Prefer Scenario Outline over copy-pasted scenarios.
+- `npm run bdd:check` must pass (no undefined/ambiguous steps). Run `npm run bdd:usage` to find unused steps before deleting or adding steps.

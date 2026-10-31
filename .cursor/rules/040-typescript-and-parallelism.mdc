@@ -1,0 +1,20 @@
+---
+description: TypeScript strictness and parallel-safe design
+globs: src/**/*.ts,tests/**/*.ts,tools/**/*.ts
+alwaysApply: false
+---
+
+# TypeScript and parallel safety
+
+- **RULE-011 — TypeScript strict mode is mandatory.** `strict`, `noImplicitAny`, `strictNullChecks`, `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` stay on. Do not weaken `tsconfig.json`.
+  - No `any` (ESLint error). Use `unknown` plus a type guard or Zod/Ajv validation for external input.
+  - No `@ts-ignore`. `@ts-expect-error` only with a description.
+  - Type assertions (`as`) only after a runtime check that proves the type, never on API responses — validate them with a schema instead.
+  - Use `import type` for type-only imports (`verbatimModuleSyntax`).
+- **RULE-010 — Tests must support parallel execution.**
+  - No module-level mutable state. Allowed exceptions (documented in ADR-004/ADR-008): the per-worker `BrowserManager`, the write-once frozen config, the per-worker `AttemptTracker`, and the run-level reference-app handle in `src/bdd/hooks/reference-app.hooks.ts` (coordinator only).
+  - Scenario data must be unique per scenario (run ID + worker ID + sequence); never mutate shared accounts' records.
+  - Every artifact path comes from `ScenarioArtifacts` so parallel workers never collide.
+  - Scenarios that truly cannot run concurrently are tagged `@serial`.
+- **RULE-009** applies to code too: no helper may cache data across scenarios.
+- Files over 300 lines fail lint (`max-lines`); split by responsibility.

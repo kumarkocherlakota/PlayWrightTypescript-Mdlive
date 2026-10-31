@@ -1,0 +1,10 @@
+{
+  "logging": {
+    "level": "info"
+  },
+  "artifacts": {
+    "trace": "retain-on-failure",
+    "video": "retain-on-failure",
+    "screenshot": "only-on-failure"
+  }
+}
